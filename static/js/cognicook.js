@@ -15,8 +15,78 @@ document.addEventListener("DOMContentLoaded", () => {
         button.classList.add("ready");
     });
 
+    initializeThemeToggle();
     initializeRegisterValidation();
 });
+
+function initializeThemeToggle() {
+    const toggle = document.querySelector("#theme-toggle");
+    if (!toggle) {
+        return;
+    }
+
+    const storageKey = "cognicook-theme";
+    const allowedThemes = new Set(["dark", "light"]);
+    const root = document.documentElement;
+
+    function currentTheme() {
+        return allowedThemes.has(root.dataset.theme) ? root.dataset.theme : "dark";
+    }
+
+    function persistTheme(theme) {
+        try {
+            window.localStorage.setItem(storageKey, theme);
+        } catch (error) {
+            // Storage can be unavailable in strict/private browsing contexts.
+        }
+    }
+
+    function updateToggleState(theme) {
+        const isLight = theme === "light";
+        toggle.setAttribute("aria-pressed", String(isLight));
+        toggle.setAttribute("aria-label", isLight ? "Switch to dark mode" : "Switch to light mode");
+        toggle.title = isLight ? "Switch to dark mode" : "Switch to light mode";
+    }
+
+    function applyTheme(theme, shouldPersist = true) {
+        if (!allowedThemes.has(theme)) {
+            return;
+        }
+
+        root.dataset.theme = theme;
+        root.dataset.bsTheme = theme;
+        updateToggleState(theme);
+
+        if (shouldPersist) {
+            persistTheme(theme);
+        }
+    }
+
+    toggle.addEventListener("click", () => {
+        applyTheme(currentTheme() === "light" ? "dark" : "light");
+    });
+
+    updateToggleState(currentTheme());
+
+    const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: light)");
+    const handleColorSchemeChange = (event) => {
+        try {
+            if (window.localStorage.getItem(storageKey)) {
+                return;
+            }
+        } catch (error) {
+            return;
+        }
+
+        applyTheme(event.matches ? "light" : "dark", false);
+    };
+
+    if (colorSchemeQuery.addEventListener) {
+        colorSchemeQuery.addEventListener("change", handleColorSchemeChange);
+    } else if (colorSchemeQuery.addListener) {
+        colorSchemeQuery.addListener(handleColorSchemeChange);
+    }
+}
 
 function initializeRegisterValidation() {
     const registerForm = document.querySelector("#register-form");
