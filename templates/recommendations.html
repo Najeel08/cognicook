@@ -1,0 +1,87 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<section class="glass-panel recommendation-hero">
+  <div>
+    <p class="eyebrow">Strict Recipe Matches</p>
+    <h1>Recipes you can cook with what you already have.</h1>
+    <p class="lead-copy">
+      These results only use your available ingredients, along with common kitchen basics such as salt, oil, sugar, and water.
+    </p>
+    <div class="button-row page-actions">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-neon-secondary">Back to Dashboard</a>
+    </div>
+  </div>
+
+  <div class="ingredient-chip-group">
+    {% for ingredient in ingredients %}
+    <span class="ingredient-chip">{{ ingredient }}</span>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="glass-panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">Exact Results</p>
+      <h2>Strict recipe cards</h2>
+    </div>
+    <div class="stat-chip">{{ strict_pagination.total }} results</div>
+  </div>
+
+  {% if strict_pagination.items %}
+  <div class="recipe-grid">
+    {% for recipe in strict_pagination.items %}
+    <article class="recipe-card glass-card">
+      <div class="recipe-card-top">
+        <span class="meta-badge meta-badge-green">Ready now</span>
+        <span class="meta-badge">0 extras needed</span>
+        <span class="meta-badge">{{ recipe.difficulty|default('standard', true)|title }}</span>
+      </div>
+      <h3>{{ recipe.title }}</h3>
+      <p class="recipe-meta">{{ recipe.diet_type|default('mixed', true)|replace('_', ' ')|title }}</p>
+      <p class="recipe-snippet">{{ recipe.ingredients }}</p>
+      <div class="recipe-card-footer">
+        <span>{{ recipe.cooking_time or 0 }} mins</span>
+        <div class="button-row">
+          <a href="{{ url_for('recipe_detail', recipe_id=recipe.id) }}" class="btn btn-neon-secondary btn-sm">View</a>
+          <form method="POST" action="{{ url_for('favorite', recipe_id=recipe.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+            {% if recipe.id in favorite_recipe_ids %}
+            <button type="submit" class="btn btn-danger-soft btn-sm">Remove</button>
+            {% else %}
+            <button type="submit" class="btn btn-neon-primary btn-sm">Save</button>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <h3>No recipes found with given ingredients.</h3>
+    <p>Try the similar recipe flow to discover dishes that need only a few additional ingredients.</p>
+  </div>
+  {% endif %}
+
+  {% set pagination = strict_pagination %}
+  {% set page_param = "page" %}
+  {% include "_pagination_v2.html" %}
+</section>
+
+<section class="glass-panel callout-panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">Next Step</p>
+      <h2>Explore close matches</h2>
+    </div>
+  </div>
+
+  <p class="lead-copy">
+    View recipes that need only one to three additional ingredients, ranked by ingredient overlap and similarity score.
+  </p>
+  <a href="{{ url_for('similar_recipes_page', ingredients=ingredients_text) }}" class="btn btn-neon-primary">View Similar Recipes</a>
+</section>
+
+{% endblock %}

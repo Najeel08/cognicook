@@ -1,0 +1,4 @@
+title,ingredients,instructions,cuisine,state,diet_type,difficulty,cooking_time,servings
+Alpha Rice,"rice,water,salt","Wash rice. Cook with water.",indian,kerala,veg,Easy,20,2
+Alpha Rice,"rice,water,salt","Duplicate row should be ignored.",indian,kerala,veg,Easy,20,2
+Beta Curry,"onion,tomato,cumin","Cook onion. Add tomato.",indian,goa,veg,Medium,30,3

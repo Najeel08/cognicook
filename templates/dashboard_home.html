@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<section class="hero-panel glass-panel dashboard-panel">
+  <div>
+    <p class="eyebrow">Welcome back, {{ current_user.username|default(current_user.name, true) }}</p>
+    <h1>Find recipes from the ingredients already in your kitchen.</h1>
+    <p class="lead-copy">
+      Enter at least three ingredients to see recipes you can cook right away, then explore similar dishes that need only a few extras.
+    </p>
+  </div>
+
+  <form method="POST" class="ingredient-form search-panel" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <label class="field-label" for="ingredients">Available ingredients</label>
+    <textarea
+      id="ingredients"
+      name="ingredients"
+      class="form-control"
+      rows="5"
+      placeholder="Example: onion, tomato, potato, cumin"
+      required
+    ></textarea>
+    <div class="form-hint">Use commas to separate ingredients. Basic items like salt, oil, sugar, and water are considered available automatically.</div>
+    <button class="btn btn-neon-primary mt-2">Search Recipes</button>
+  </form>
+</section>
+
+{% endblock %}

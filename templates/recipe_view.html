@@ -1,0 +1,76 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<section class="glass-panel recipe-detail-layout">
+  <div class="recipe-detail-main">
+    <p class="eyebrow">Recipe Detail</p>
+    <h1>{{ recipe.title }}</h1>
+    <div class="detail-meta-row">
+      <span class="meta-badge">{{ recipe.cuisine|default('unknown', true)|title }}</span>
+      {% if recipe.state %}<span class="meta-badge">{{ recipe.state|title }}</span>{% endif %}
+      <span class="meta-badge">{{ recipe.difficulty|default('standard', true)|title }}</span>
+      <span class="meta-badge">{{ recipe.cooking_time or 0 }} mins</span>
+      <span class="meta-badge">{{ recipe.servings or 0 }} servings</span>
+    </div>
+
+    <div class="detail-section">
+      <h2>Ingredients</h2>
+      <div class="ingredient-chip-group">
+        {% for ing in recipe.ingredient_list() %}
+        <span class="ingredient-chip">{{ ing }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h2>Cooking Instructions</h2>
+      {% set steps = recipe.instruction_steps() %}
+      {% if steps %}
+      <ol class="instruction-steps">
+        {% for step in steps %}
+        <li class="instruction-step">
+          <span class="step-number">Step {{ loop.index }}</span>
+          <span class="step-text">{{ step }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <div class="empty-state">
+        <h3>No cooking instructions available.</h3>
+        <p>This recipe does not include preparation steps yet.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <aside class="recipe-detail-side glass-card">
+    <p class="eyebrow">Quick Actions</p>
+    <p class="lead-copy">
+      Review the recipe details, keep it in your favorites, and continue browsing the catalog.
+    </p>
+
+    <div class="stacked-actions">
+      {% if current_user.is_authenticated %}
+      {% if is_favorite %}
+      <form method="POST" action="{{ url_for('favorite', recipe_id=recipe.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn btn-danger-soft w-100">Remove from Favorites</button>
+      </form>
+      {% else %}
+      <form method="POST" action="{{ url_for('favorite', recipe_id=recipe.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+        <button type="submit" class="btn btn-neon-primary w-100">Save to Favorites</button>
+      </form>
+      {% endif %}
+      {% else %}
+      <a href="{{ url_for('login') }}" class="btn btn-neon-primary w-100">Login to Save</a>
+      {% endif %}
+
+      <a href="{{ back_url }}" class="btn btn-neon-secondary w-100">Back</a>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-neon-secondary w-100">Back to Dashboard</a>
+      <a href="{{ url_for('favorites') }}" class="btn btn-neon-secondary w-100">Open Favorites</a>
+    </div>
+  </aside>
+</section>
+
+{% endblock %}
