@@ -1,6 +1,10 @@
 import re
 
-EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+EMAIL_PATTERN = re.compile(
+    r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
+    r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
+    r"[A-Za-z]{2,63}$"
+)
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,30}$")
 UPPERCASE_PATTERN = re.compile(r"[A-Z]")
 LOWERCASE_PATTERN = re.compile(r"[a-z]")
@@ -24,22 +28,12 @@ COMMON_WEAK_PASSWORDS = {
 }
 
 SEQUENTIAL_PATTERNS = {
-    "0123",
-    "1234",
-    "2345",
-    "3456",
-    "4567",
-    "5678",
-    "6789",
-    "7890",
-    "abcd",
-    "bcde",
-    "cdef",
-    "defg",
     "qwer",
     "asdf",
     "zxcv",
 }
+
+SEQUENTIAL_RUN_SOURCES = ("0123456789", "abcdefghijklmnopqrstuvwxyz")
 
 
 def get_positive_int(value, default, minimum=1, maximum=None):
@@ -73,11 +67,31 @@ def sanitize_text(value, max_length=120):
 
 
 def is_valid_email(value):
-    return bool(EMAIL_PATTERN.match((value or "").strip()))
+    email = (value or "").strip()
+    if len(email) > 254 or ".." in email:
+        return False
+    local_part = email.split("@", 1)[0]
+    if local_part.startswith(".") or local_part.endswith("."):
+        return False
+    return bool(EMAIL_PATTERN.fullmatch(email))
 
 
 def is_valid_username(value):
     return bool(USERNAME_PATTERN.match((value or "").strip()))
+
+
+def has_sequential_run(value, run_length=4):
+    lowered = (value or "").lower()
+    if any(pattern in lowered for pattern in SEQUENTIAL_PATTERNS):
+        return True
+
+    for source in SEQUENTIAL_RUN_SOURCES:
+        for index in range(len(source) - run_length + 1):
+            sequence = source[index : index + run_length]
+            if sequence in lowered or sequence[::-1] in lowered:
+                return True
+
+    return False
 
 
 def validate_password(password):
@@ -95,7 +109,7 @@ def validate_password(password):
         errors.append("Password must include at least one number.")
     if REPEATED_CHARACTER_PATTERN.search(value):
         errors.append("Password cannot contain simple repeated sequences like 1111 or aaaa.")
-    if any(pattern in lowered for pattern in SEQUENTIAL_PATTERNS):
+    if has_sequential_run(lowered):
         errors.append("Password cannot contain obvious sequential patterns like 1234 or abcd.")
     if lowered in COMMON_WEAK_PASSWORDS:
         errors.append("Password is too common. Please choose a stronger password.")

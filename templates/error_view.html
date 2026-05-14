@@ -2,12 +2,12 @@
 {% block content %}
 
 <section class="glass-panel error-panel">
-  <p class="eyebrow">System Status</p>
+  <p class="eyebrow">Page Status</p>
   <div class="error-code">{{ status_code }}</div>
   <h1>{{ title }}</h1>
   <p class="lead-copy">{{ message }}</p>
   <a href="{{ url_for('dashboard') if current_user.is_authenticated else url_for('login') }}" class="btn btn-neon-primary">
-    Return to Safety
+    Go back
   </a>
 </section>
 

@@ -1,5 +1,6 @@
 from extensions import db
 
+
 class Favorite(db.Model):
     __table_args__ = (
         db.UniqueConstraint("user_id", "recipe_id", name="uq_favorite_user_recipe"),

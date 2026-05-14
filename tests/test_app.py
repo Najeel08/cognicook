@@ -159,6 +159,12 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.register_user(email="invalid-email")
         self.assertIn("Please enter a valid email address.", response.get_data(as_text=True))
 
+        response = self.register_user(email="user@domain.c")
+        self.assertIn("Please enter a valid email address.", response.get_data(as_text=True))
+
+        response = self.register_user(email=".user@example.com")
+        self.assertIn("Please enter a valid email address.", response.get_data(as_text=True))
+
         response = self.register_user(username="ab")
         self.assertIn("Username must be 3 to 30 characters", response.get_data(as_text=True))
 
@@ -171,6 +177,9 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Password cannot contain simple repeated sequences", response.get_data(as_text=True))
 
         response = self.register_user(password="Abcd1234")
+        self.assertIn("Password cannot contain obvious sequential patterns", response.get_data(as_text=True))
+
+        response = self.register_user(password="Safe9876Pass")
         self.assertIn("Password cannot contain obvious sequential patterns", response.get_data(as_text=True))
 
         response = self.register_user(password="Password123")
@@ -301,6 +310,16 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("0 extras needed", text)
         self.assertIn("View Similar Recipes", text)
         self.assertNotIn("Similar Matches", text)
+
+    def test_pagination_marks_current_and_disabled_controls_for_screen_readers(self):
+        self.register_user()
+        self.login_user()
+
+        response = self.client.get("/similar?ingredients=onion,tomato,potato&per_page=2")
+        text = response.get_data(as_text=True)
+
+        self.assertIn('aria-current="page"', text)
+        self.assertIn('aria-disabled="true">Previous</span>', text)
 
     def test_strict_matching_allows_only_common_basics_to_be_missing(self):
         self.register_user()

@@ -1,10 +1,29 @@
+const historyReloadKey = `cognicook-history-reload:${window.location.pathname}${window.location.search}`;
+
 window.addEventListener("pageshow", (event) => {
     const navigationEntry = performance.getEntriesByType("navigation")[0];
     const restoredFromHistory = event.persisted || navigationEntry?.type === "back_forward";
 
-    if (restoredFromHistory) {
-        window.location.reload();
+    if (!restoredFromHistory) {
+        try {
+            window.sessionStorage.removeItem(historyReloadKey);
+        } catch (error) {
+            // Session storage can be unavailable in strict/private browsing contexts.
+        }
+        return;
     }
+
+    try {
+        if (window.sessionStorage.getItem(historyReloadKey) === "1") {
+            window.sessionStorage.removeItem(historyReloadKey);
+            return;
+        }
+        window.sessionStorage.setItem(historyReloadKey, "1");
+    } catch (error) {
+        return;
+    }
+
+    window.location.reload();
 });
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -70,11 +89,14 @@ function initializeThemeToggle() {
 
     const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: light)");
     const handleColorSchemeChange = (event) => {
+        let hasStoredTheme = false;
         try {
-            if (window.localStorage.getItem(storageKey)) {
-                return;
-            }
+            hasStoredTheme = allowedThemes.has(window.localStorage.getItem(storageKey));
         } catch (error) {
+            hasStoredTheme = false;
+        }
+
+        if (hasStoredTheme) {
             return;
         }
 
@@ -114,23 +136,43 @@ function initializeRegisterValidation() {
         "cognicook",
         "cognicook123",
     ]);
-    const sequentialPatterns = [
-        "0123",
-        "1234",
-        "2345",
-        "3456",
-        "4567",
-        "5678",
-        "6789",
-        "7890",
-        "abcd",
-        "bcde",
-        "cdef",
-        "defg",
+    const keyboardPatterns = [
         "qwer",
         "asdf",
         "zxcv",
     ];
+    const sequentialSources = ["0123456789", "abcdefghijklmnopqrstuvwxyz"];
+
+    function hasSequentialRun(value, runLength = 4) {
+        const lowered = value.toLowerCase();
+        if (keyboardPatterns.some((pattern) => lowered.includes(pattern))) {
+            return true;
+        }
+
+        return sequentialSources.some((source) => {
+            for (let index = 0; index <= source.length - runLength; index += 1) {
+                const sequence = source.slice(index, index + runLength);
+                const reversed = sequence.split("").reverse().join("");
+                if (lowered.includes(sequence) || lowered.includes(reversed)) {
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+
+    function isValidEmail(email) {
+        const value = email.trim();
+        const localPart = value.split("@", 1)[0];
+        const emailPattern = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
+        return (
+            value.length <= 254
+            && !value.includes("..")
+            && !localPart.startsWith(".")
+            && !localPart.endsWith(".")
+            && emailPattern.test(value)
+        );
+    }
 
     function validateRegisterForm() {
         const errors = [];
@@ -143,7 +185,7 @@ function initializeRegisterValidation() {
         if (!/^[A-Za-z0-9_.-]{3,30}$/.test(username)) {
             errors.push("Username must be 3 to 30 characters and may contain letters, numbers, dots, hyphens, or underscores.");
         }
-        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        if (!isValidEmail(email)) {
             errors.push("Please enter a valid email address.");
         }
         if (password.length < 8) {
@@ -161,7 +203,7 @@ function initializeRegisterValidation() {
         if (/(.)\1{3,}/i.test(password)) {
             errors.push("Password cannot contain simple repeated sequences like 1111 or aaaa.");
         }
-        if (sequentialPatterns.some((pattern) => loweredPassword.includes(pattern))) {
+        if (hasSequentialRun(loweredPassword)) {
             errors.push("Password cannot contain obvious sequential patterns like 1234 or abcd.");
         }
         if (commonWeakPasswords.has(loweredPassword)) {

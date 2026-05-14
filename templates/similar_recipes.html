@@ -25,7 +25,7 @@
   <div class="panel-heading">
     <div>
       <p class="eyebrow">Similar Recipe Filters</p>
-      <h2>Refine the similar matches</h2>
+      <h2>Refine matches</h2>
     </div>
     <div class="stat-chip">{{ similar_pagination.total }} results</div>
   </div>
@@ -57,10 +57,10 @@
       <label class="field-label" for="sort">Sort</label>
       <select id="sort" name="sort" class="form-select">
         <option value="relevance" {% if filters.sort == "relevance" %}selected{% endif %}>Relevance</option>
-        <option value="title_asc" {% if filters.sort == "title_asc" %}selected{% endif %}>Title A-Z</option>
-        <option value="title_desc" {% if filters.sort == "title_desc" %}selected{% endif %}>Title Z-A</option>
-        <option value="time_asc" {% if filters.sort == "time_asc" %}selected{% endif %}>Cooking time low-high</option>
-        <option value="time_desc" {% if filters.sort == "time_desc" %}selected{% endif %}>Cooking time high-low</option>
+        <option value="title_asc" {% if filters.sort == "title_asc" %}selected{% endif %}>Title A to Z</option>
+        <option value="title_desc" {% if filters.sort == "title_desc" %}selected{% endif %}>Title Z to A</option>
+        <option value="time_asc" {% if filters.sort == "time_asc" %}selected{% endif %}>Cooking time: low to high</option>
+        <option value="time_desc" {% if filters.sort == "time_desc" %}selected{% endif %}>Cooking time: high to low</option>
       </select>
     </div>
 

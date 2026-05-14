@@ -21,7 +21,7 @@
         <span class="meta-badge">{{ recipe.diet_type|default('mixed', true)|replace('_', ' ')|title }}</span>
         <span class="meta-badge">{{ recipe.difficulty|default('standard', true)|title }}</span>
       </div>
-      <h3>{{ recipe.title }}</h3>
+      <h2 class="recipe-card-title">{{ recipe.title }}</h2>
       <p class="recipe-meta">{{ recipe.cuisine|default('unknown', true)|title }} {% if recipe.state %}<span class="meta-separator"></span> {{ recipe.state|title }}{% endif %}</p>
       <p class="recipe-snippet">{{ recipe.ingredients }}</p>
       <div class="recipe-card-footer">

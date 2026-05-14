@@ -726,6 +726,11 @@ h3 {
     gap: 0.8rem;
 }
 
+.recipe-card-title {
+    font-size: 1.17em;
+    line-height: 1.2;
+}
+
 .recipe-card-top,
 .recipe-card-footer {
     display: flex;

@@ -3,14 +3,14 @@
   {% if pagination.has_prev %}
   <a class="page-link-neon" href="{{ request.path }}?{{ query_string_for(page_param, pagination.prev_num) }}">Previous</a>
   {% else %}
-  <span class="page-link-neon disabled">Previous</span>
+  <span class="page-link-neon disabled" aria-disabled="true">Previous</span>
   {% endif %}
 
   <div class="page-number-row">
     {% for page_number in pagination.iter_pages() %}
       {% if page_number %}
         {% if page_number == pagination.page %}
-        <span class="page-pill active">{{ page_number }}</span>
+        <span class="page-pill active" aria-current="page">{{ page_number }}</span>
         {% else %}
         <a class="page-pill" href="{{ request.path }}?{{ query_string_for(page_param, page_number) }}">{{ page_number }}</a>
         {% endif %}
@@ -23,7 +23,7 @@
   {% if pagination.has_next %}
   <a class="page-link-neon" href="{{ request.path }}?{{ query_string_for(page_param, pagination.next_num) }}">Next</a>
   {% else %}
-  <span class="page-link-neon disabled">Next</span>
+  <span class="page-link-neon disabled" aria-disabled="true">Next</span>
   {% endif %}
 </nav>
 {% endif %}
