@@ -9,7 +9,7 @@
       These recommendations are limited to dishes that require one to three additional ingredients and are ranked by relevance by default.
     </p>
     <div class="button-row page-actions">
-      <a href="{{ url_for('recommendations', ingredients=ingredients_text) }}" class="btn btn-neon-secondary">Back to Strict Matches</a>
+      <a href="{{ url_for('recommendations', ingredients=ingredients_text) }}" class="btn btn-neon-secondary">Back to Exact Matches</a>
       <a href="{{ url_for('dashboard') }}" class="btn btn-neon-secondary">Back to Dashboard</a>
     </div>
   </div>
@@ -82,7 +82,6 @@
         <span class="meta-badge">{{ item.recipe.difficulty|default('standard', true)|title }}</span>
       </div>
       <h3>{{ item.recipe.title }}</h3>
-      <p class="recipe-meta">{{ item.recipe.cuisine|default('unknown', true)|title }}{% if item.recipe.state %} <span class="meta-separator"></span> {{ item.recipe.state|title }}{% endif %}</p>
 
       <div class="match-group">
         <p><strong>Ingredient match:</strong> {{ item.match_count }} of {{ item.required_count }}</p>
@@ -91,15 +90,15 @@
       </div>
 
       <div class="recipe-card-footer">
-        <span>{{ item.recipe.cooking_time or 0 }} mins</span>
+        <span>{{ item.recipe.cooking_time or 0 }} min</span>
         <div class="button-row">
           <a href="{{ url_for('recipe_detail', recipe_id=item.recipe.id) }}" class="btn btn-neon-secondary btn-sm">View</a>
           <form method="POST" action="{{ url_for('favorite', recipe_id=item.recipe.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             {% if item.recipe.id in favorite_recipe_ids %}
-            <button type="submit" class="btn btn-danger-soft btn-sm">Remove</button>
+            <button type="submit" class="btn btn-danger-soft btn-sm" aria-label="Remove {{ item.recipe.title }} from favorites">Remove</button>
             {% else %}
-            <button type="submit" class="btn btn-neon-primary btn-sm">Save</button>
+            <button type="submit" class="btn btn-neon-primary btn-sm" aria-label="Save {{ item.recipe.title }} to favorites">Save</button>
             {% endif %}
           </form>
         </div>

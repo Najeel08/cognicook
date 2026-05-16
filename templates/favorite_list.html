@@ -22,15 +22,14 @@
         <span class="meta-badge">{{ recipe.difficulty|default('standard', true)|title }}</span>
       </div>
       <h2 class="recipe-card-title">{{ recipe.title }}</h2>
-      <p class="recipe-meta">{{ recipe.cuisine|default('unknown', true)|title }} {% if recipe.state %}<span class="meta-separator"></span> {{ recipe.state|title }}{% endif %}</p>
       <p class="recipe-snippet">{{ recipe.ingredients }}</p>
       <div class="recipe-card-footer">
-        <span>{{ recipe.cooking_time or 0 }} mins</span>
+        <span>{{ recipe.cooking_time or 0 }} min</span>
         <div class="button-row">
           <a href="{{ url_for('recipe_detail', recipe_id=recipe.id) }}" class="btn btn-neon-secondary btn-sm">View</a>
           <form method="POST" action="{{ url_for('remove_favorite', recipe_id=recipe.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-            <button type="submit" class="btn btn-danger-soft btn-sm">Remove</button>
+            <button type="submit" class="btn btn-danger-soft btn-sm" aria-label="Remove {{ recipe.title }} from favorites">Remove</button>
           </form>
         </div>
       </div>

@@ -29,8 +29,7 @@ window.addEventListener("pageshow", (event) => {
 document.addEventListener("DOMContentLoaded", () => {
     const buttons = document.querySelectorAll(".btn-neon-primary, .btn-neon-secondary, .btn-danger-soft");
 
-    buttons.forEach((button, index) => {
-        button.style.animationDelay = `${index * 40}ms`;
+    buttons.forEach((button) => {
         button.classList.add("ready");
     });
 

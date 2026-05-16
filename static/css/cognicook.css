@@ -180,7 +180,7 @@ body {
     min-height: 100vh;
     background: var(--bg-body);
     color: var(--text-main);
-    font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color-scheme: var(--color-scheme);
 }
 
@@ -212,6 +212,25 @@ button,
     position: relative;
     overflow: hidden;
     min-height: 100vh;
+}
+
+.skip-link {
+    position: fixed;
+    top: 0.75rem;
+    left: 0.75rem;
+    z-index: 1000;
+    padding: 0.65rem 1rem;
+    border-radius: 999px;
+    background: var(--primary-gradient);
+    color: var(--primary-text);
+    font-weight: 700;
+    box-shadow: var(--primary-shadow);
+    transform: translateY(-160%);
+}
+
+.skip-link:focus {
+    color: var(--primary-text);
+    transform: translateY(0);
 }
 
 .ambient {
@@ -348,7 +367,8 @@ button,
     padding: 0.35rem 0.1rem;
 }
 
-.ghost-link:hover {
+.ghost-link:hover,
+.ghost-link[aria-current="page"] {
     color: var(--text-main);
     transform: translateY(-1px);
 }
@@ -463,6 +483,7 @@ h3 {
     margin: 0;
     color: var(--text-main);
     letter-spacing: 0.02em;
+    line-height: 1.18;
 }
 
 .lead-copy,
@@ -867,6 +888,52 @@ h3 {
 .recipe-detail-side {
     display: grid;
     gap: 1rem;
+}
+
+.quick-action-section {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.quick-action-section h2 {
+    font-size: 1rem;
+}
+
+.measurement-list {
+    display: grid;
+    gap: 0.55rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.measurement-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding-bottom: 0.55rem;
+    border-bottom: 1px solid var(--surface-border);
+}
+
+.measurement-list li:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.measurement-ingredient {
+    color: var(--text-main);
+    overflow-wrap: anywhere;
+}
+
+.measurement-value {
+    color: var(--accent-green);
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.measurement-empty {
+    margin: 0;
+    color: var(--text-muted);
 }
 
 .error-code {

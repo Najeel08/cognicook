@@ -3,7 +3,7 @@
 
 <section class="glass-panel recommendation-hero">
   <div>
-    <p class="eyebrow">Strict Recipe Matches</p>
+    <p class="eyebrow">Exact Recipe Matches</p>
     <h1>Recipes you can cook with what you already have.</h1>
     <p class="lead-copy">
       These results only use your available ingredients, along with common kitchen basics such as salt, oil, sugar, and water.
@@ -42,15 +42,15 @@
       <p class="recipe-meta">{{ recipe.diet_type|default('mixed', true)|replace('_', ' ')|title }}</p>
       <p class="recipe-snippet">{{ recipe.ingredients }}</p>
       <div class="recipe-card-footer">
-        <span>{{ recipe.cooking_time or 0 }} mins</span>
+        <span>{{ recipe.cooking_time or 0 }} min</span>
         <div class="button-row">
           <a href="{{ url_for('recipe_detail', recipe_id=recipe.id) }}" class="btn btn-neon-secondary btn-sm">View</a>
           <form method="POST" action="{{ url_for('favorite', recipe_id=recipe.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             {% if recipe.id in favorite_recipe_ids %}
-            <button type="submit" class="btn btn-danger-soft btn-sm">Remove</button>
+            <button type="submit" class="btn btn-danger-soft btn-sm" aria-label="Remove {{ recipe.title }} from favorites">Remove</button>
             {% else %}
-            <button type="submit" class="btn btn-neon-primary btn-sm">Save</button>
+            <button type="submit" class="btn btn-neon-primary btn-sm" aria-label="Save {{ recipe.title }} to favorites">Save</button>
             {% endif %}
           </form>
         </div>
@@ -60,7 +60,7 @@
   </div>
   {% else %}
   <div class="empty-state">
-    <h3>No recipes found with given ingredients.</h3>
+    <h3>No exact recipes found for these ingredients.</h3>
     <p>Try the similar recipe flow to discover dishes that need only a few additional ingredients.</p>
   </div>
   {% endif %}

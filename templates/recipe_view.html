@@ -6,11 +6,8 @@
     <p class="eyebrow">Recipe Detail</p>
     <h1>{{ recipe.title }}</h1>
     <div class="detail-meta-row">
-      <span class="meta-badge">{{ recipe.cuisine|default('unknown', true)|title }}</span>
-      {% if recipe.state %}<span class="meta-badge">{{ recipe.state|title }}</span>{% endif %}
       <span class="meta-badge">{{ recipe.difficulty|default('standard', true)|title }}</span>
-      <span class="meta-badge">{{ recipe.cooking_time or 0 }} mins</span>
-      <span class="meta-badge">{{ recipe.servings or 0 }} servings</span>
+      <span class="meta-badge">{{ recipe.cooking_time or 0 }} min</span>
     </div>
 
     <div class="detail-section">
@@ -43,33 +40,52 @@
     </div>
   </div>
 
-  <aside class="recipe-detail-side glass-card">
-    <p class="eyebrow">Quick Actions</p>
-    <p class="lead-copy">
-      Review the recipe details, keep it in your favorites, and continue browsing the catalog.
-    </p>
+  <aside class="recipe-detail-side">
+    <div class="glass-card">
+      <p class="eyebrow">Quick Actions</p>
+      <p class="lead-copy">
+        Review the recipe details, keep it in your favorites, and continue browsing the catalog.
+      </p>
 
-    <div class="stacked-actions">
-      {% if current_user.is_authenticated %}
-      {% if is_favorite %}
-      <form method="POST" action="{{ url_for('favorite', recipe_id=recipe.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-        <button type="submit" class="btn btn-danger-soft w-100">Remove from Favorites</button>
-      </form>
-      {% else %}
-      <form method="POST" action="{{ url_for('favorite', recipe_id=recipe.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-        <button type="submit" class="btn btn-neon-primary w-100">Save to Favorites</button>
-      </form>
-      {% endif %}
-      {% else %}
-      <a href="{{ url_for('login') }}" class="btn btn-neon-primary w-100">Login to Save</a>
-      {% endif %}
+      <div class="stacked-actions">
+        {% if current_user.is_authenticated %}
+        {% if is_favorite %}
+        <form method="POST" action="{{ url_for('favorite', recipe_id=recipe.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <button type="submit" class="btn btn-danger-soft w-100">Remove from Favorites</button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('favorite', recipe_id=recipe.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+          <button type="submit" class="btn btn-neon-primary w-100">Save to Favorites</button>
+        </form>
+        {% endif %}
+        {% else %}
+        <a href="{{ url_for('login') }}" class="btn btn-neon-primary w-100">Log in to Save</a>
+        {% endif %}
 
-      <a href="{{ back_url }}" class="btn btn-neon-secondary w-100">Back</a>
-      <a href="{{ url_for('dashboard') }}" class="btn btn-neon-secondary w-100">Back to Dashboard</a>
-      <a href="{{ url_for('favorites') }}" class="btn btn-neon-secondary w-100">Open Favorites</a>
+        <a href="{{ back_url }}" class="btn btn-neon-secondary w-100">Back</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-neon-secondary w-100">Back to Dashboard</a>
+        <a href="{{ url_for('favorites') }}" class="btn btn-neon-secondary w-100">Open Favorites</a>
+      </div>
     </div>
+
+    <section class="quick-action-section glass-card">
+      <h2>Ingredient Measurements</h2>
+      {% set measurements = recipe.ingredient_measurement_list() %}
+      {% if measurements %}
+      <ul class="measurement-list">
+        {% for measurement in measurements %}
+        <li>
+          <span class="measurement-ingredient">{{ measurement.ingredient }}</span>
+          <span class="measurement-value">{{ measurement.display_measurement }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="measurement-empty">Measurement data is not available yet.</p>
+      {% endif %}
+    </section>
   </aside>
 </section>
 

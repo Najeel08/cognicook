@@ -137,7 +137,7 @@ def register_routes(app):
                 flash("Email already registered. Please use a different email address.", "danger")
                 return redirect(url_for("register"))
 
-            flash("Registration successful. Account created successfully. Please login.", "success")
+            flash("Registration successful. Account created successfully. Please log in.", "success")
             return redirect(url_for("login"))
 
         return render_template("register_v2.html", title="Register")

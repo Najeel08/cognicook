@@ -6,17 +6,15 @@ from models.favorite import Favorite
 from models.recipe import Recipe
 from services.recipe_service import invalidate_recipe_similarity_cache
 from utils.ingredient_cleaner import normalize_ingredient_text, normalize_search_text
+from utils.ingredient_measurements import serialize_ingredient_measurements
 
 REQUIRED_COLUMNS = {
     "title",
     "ingredients",
     "instructions",
-    "cuisine",
-    "state",
     "diet_type",
     "difficulty",
     "cooking_time",
-    "servings",
 }
 
 
@@ -52,6 +50,12 @@ def normalize_row(row):
     title = normalize_search_text(row.get("title", ""))
     ingredients = normalize_ingredient_text(row.get("ingredients", ""))
     instructions = normalize_instructions(row.get("instructions", ""))
+    measurement_source = (
+        row.get("ingredient_measurements")
+        or row.get("measurements")
+        or row.get("ingredient_measurement")
+        or ""
+    )
 
     if not title or not ingredients or not instructions:
         return None
@@ -60,12 +64,14 @@ def normalize_row(row):
         "title": title,
         "ingredients": ingredients,
         "instructions": instructions,
-        "cuisine": normalize_category(row.get("cuisine", "")),
-        "state": normalize_category(row.get("state", "")),
+        # Accept known measurement column names while keeping the current CSV schema optional.
+        "ingredient_measurements": serialize_ingredient_measurements(
+            measurement_source,
+            known_ingredients=ingredients,
+        ),
         "diet_type": normalize_category(row.get("diet_type", "")),
         "difficulty": normalize_category(row.get("difficulty", "")),
         "cooking_time": parse_int(row.get("cooking_time", 0)),
-        "servings": parse_int(row.get("servings", 0)),
     }
 
 
@@ -78,12 +84,10 @@ def recipe_fingerprint_from_row(row):
         row["title"].lower(),
         row["ingredients"],
         row["instructions"],
-        row["cuisine"],
-        row["state"],
+        row.get("ingredient_measurements") or "",
         row["diet_type"],
         row["difficulty"],
         row["cooking_time"],
-        row["servings"],
     )
 
 
@@ -92,12 +96,10 @@ def recipe_fingerprint_from_model(recipe):
         recipe.title.lower(),
         recipe.ingredients,
         recipe.instructions,
-        recipe.cuisine or "",
-        recipe.state or "",
+        recipe.ingredient_measurements or "",
         recipe.diet_type or "",
         recipe.difficulty or "",
         recipe.cooking_time or 0,
-        recipe.servings or 0,
     )
 
 

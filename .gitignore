@@ -11,8 +11,14 @@ venv/
 
 instance/.secret_key
 instance/*.log
+instance/*.db
 instance/*.db-journal
+instance/*.db-shm
+instance/*.db-wal
+database/*.db
 database/*.db-journal
+database/*.db-shm
+database/*.db-wal
 
 .pytest_cache/
 .coverage

@@ -7,7 +7,7 @@ from time import time
 from urllib.parse import urlencode
 
 from flask import Flask, abort, flash, redirect, render_template, request, session, url_for
-from sqlalchemy import event
+from sqlalchemy import event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -96,6 +96,20 @@ def prepare_database_file(app):
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{recovered_path.as_posix()}"
 
 
+def ensure_recipe_measurement_schema():
+    inspector = inspect(db.engine)
+    if not inspector.has_table("recipe"):
+        return
+
+    column_names = {column["name"] for column in inspector.get_columns("recipe")}
+    if "ingredient_measurements" in column_names:
+        return
+
+    # Keep existing SQLite databases compatible until the project adopts migrations.
+    with db.engine.begin() as connection:
+        connection.execute(text("ALTER TABLE recipe ADD COLUMN ingredient_measurements TEXT"))
+
+
 def create_app(config_object=Config):
     app = Flask(__name__)
     app.config.from_object(config_object)
@@ -112,7 +126,7 @@ def create_app(config_object=Config):
 
     @login_manager.unauthorized_handler
     def handle_unauthorized():
-        flash("Please login to continue.", "warning")
+        flash("Please log in to continue.", "warning")
         return redirect(url_for("login"))
 
     def generate_csrf_token():
@@ -211,7 +225,7 @@ def create_app(config_object=Config):
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+            "style-src 'self' https://cdn.jsdelivr.net; "
             "script-src 'self' https://cdn.jsdelivr.net; "
             "img-src 'self' data:; "
             "font-src 'self' https://cdn.jsdelivr.net; "
@@ -240,6 +254,7 @@ def create_app(config_object=Config):
         from models.user import User
 
         db.create_all()
+        ensure_recipe_measurement_schema()
         if app.config.get("AUTO_BOOTSTRAP_DATA", True):
             from services.data_loader import bootstrap_recipe_data
 

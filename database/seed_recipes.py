@@ -38,7 +38,6 @@ def seed_recipes():
                 diet_type="non_veg",
                 difficulty="easy",
                 cooking_time=15,
-                servings=2,
             ),
             Recipe(
                 title="Aloo Tomato Sabzi",
@@ -52,7 +51,6 @@ def seed_recipes():
                 diet_type="veg",
                 difficulty="easy",
                 cooking_time=20,
-                servings=2,
             ),
             Recipe(
                 title="Simple Chicken Rice",
@@ -66,7 +64,6 @@ def seed_recipes():
                 diet_type="non_veg",
                 difficulty="medium",
                 cooking_time=30,
-                servings=2,
             ),
             Recipe(
                 title="Paneer Masala",
@@ -80,7 +77,6 @@ def seed_recipes():
                 diet_type="veg",
                 difficulty="medium",
                 cooking_time=25,
-                servings=2,
             ),
             Recipe(
                 title="Dal Tadka",
@@ -94,7 +90,6 @@ def seed_recipes():
                 diet_type="veg",
                 difficulty="easy",
                 cooking_time=25,
-                servings=3,
             ),
         ]
 

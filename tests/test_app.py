@@ -13,9 +13,11 @@ from extensions import db
 from models.favorite import Favorite
 from models.recipe import Recipe
 from models.user import User
-from services.data_loader import bootstrap_recipe_data, normalize_instructions, replace_recipe_rows
+from services.data_loader import bootstrap_recipe_data, normalize_instructions, normalize_row, replace_recipe_rows
 from utils.ingredient_cleaner import clean_ingredients
+from utils.ingredient_measurements import parse_ingredient_measurements
 from utils.instructions import split_instruction_block
+from utils.pagination import paginate_list
 
 
 class CogniCookAppTests(unittest.TestCase):
@@ -55,67 +57,49 @@ class CogniCookAppTests(unittest.TestCase):
                         title="Simple Curry",
                         ingredients="onion,tomato,potato,salt,oil",
                         instructions="Cook everything together.",
-                        cuisine="north indian",
-                        state="delhi",
                         diet_type="veg",
                         difficulty="easy",
                         cooking_time=20,
-                        servings=2,
                     ),
                     Recipe(
                         title="Paneer Masala",
                         ingredients="onion,tomato,paneer,salt,oil",
                         instructions="Cook paneer in masala.",
-                        cuisine="north indian",
-                        state="punjab",
                         diet_type="veg",
                         difficulty="medium",
                         cooking_time=25,
-                        servings=2,
                     ),
                     Recipe(
                         title="Tomato Rice",
                         ingredients="rice,tomato,onion,salt,oil",
                         instructions="Cook rice and mix with tomato masala.",
-                        cuisine="south indian",
-                        state="tamil nadu",
                         diet_type="veg",
                         difficulty="easy",
                         cooking_time=18,
-                        servings=3,
                     ),
                     Recipe(
                         title="Dal Fry",
                         ingredients="onion,tomato,lentil,cumin,salt,oil",
                         instructions="Cook lentils and temper with spices.",
-                        cuisine="north indian",
-                        state="uttar pradesh",
                         diet_type="veg",
                         difficulty="medium",
                         cooking_time=30,
-                        servings=3,
                     ),
                     Recipe(
                         title="Vegetable Korma",
                         ingredients="onion,tomato,potato,paneer,cream,cashew,salt,oil",
                         instructions="Cook vegetables in rich gravy.",
-                        cuisine="north indian",
-                        state="karnataka",
                         diet_type="veg",
                         difficulty="hard",
                         cooking_time=40,
-                        servings=4,
                     ),
                     Recipe(
                         title="Masala Omelette",
                         ingredients="egg,onion,tomato,green chilli,salt,oil",
                         instructions="Whisk eggs and cook with vegetables.",
-                        cuisine="indian",
-                        state="maharashtra",
                         diet_type="non_veg",
                         difficulty="easy",
                         cooking_time=10,
-                        servings=1,
                     ),
                 ]
             )
@@ -207,7 +191,7 @@ class CogniCookAppTests(unittest.TestCase):
     def test_register_and_login_flow_uses_expected_success_message(self):
         response = self.register_user(email="USER@Example.com")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Registration successful. Account created successfully. Please login.", response.get_data(as_text=True))
+        self.assertIn("Registration successful. Account created successfully. Please log in.", response.get_data(as_text=True))
 
         response = self.login_user(email="user@example.com")
         text = response.get_data(as_text=True)
@@ -267,6 +251,10 @@ class CogniCookAppTests(unittest.TestCase):
             clean_ingredients("finely chopped carrots, soaked lentils, cashews"),
             ["carrot", "lentil", "cashew nuts"],
         )
+        self.assertEqual(
+            clean_ingredients("1 cup rice, 2 tbsp oil, 250 grams tomatoes"),
+            ["rice", "oil", "tomato"],
+        )
 
     def test_instruction_parser_preserves_single_action_phrases(self):
         self.assertEqual(
@@ -279,6 +267,36 @@ class CogniCookAppTests(unittest.TestCase):
             normalize_instructions("Wash rice\nCook with water\nServe hot"),
             "Wash rice. Cook with water. Serve hot.",
         )
+
+    def test_ingredient_measurement_parser_accepts_future_dataset_shapes(self):
+        records = parse_ingredient_measurements(
+            '[{"ingredient":"Onion","quantity":"1","unit":"cup"},{"ingredient":"Tomato","measurement":"2 medium"}]',
+            known_ingredients="onion,tomato,salt",
+        )
+
+        self.assertEqual(records[0].ingredient, "onion")
+        self.assertEqual(records[0].display_measurement, "1 cup")
+        self.assertEqual(records[1].ingredient, "tomato")
+        self.assertEqual(records[1].display_measurement, "2 medium")
+
+    def test_data_loader_normalizes_optional_future_measurements(self):
+        row = normalize_row(
+            {
+                "title": "Measured Curry",
+                "ingredients": "onion,tomato,salt",
+                "ingredient_measurements": "onion: 1 cup; tomato: 2 medium",
+                "instructions": "Cook everything.",
+                "diet_type": "veg",
+                "difficulty": "easy",
+                "cooking_time": "20",
+            }
+        )
+
+        records = parse_ingredient_measurements(row["ingredient_measurements"])
+        self.assertEqual(records[0].ingredient, "onion")
+        self.assertEqual(records[0].display_measurement, "1 cup")
+        self.assertEqual(records[1].ingredient, "tomato")
+        self.assertEqual(records[1].display_measurement, "2 medium")
 
     def test_auth_pages_use_contextual_greetings_without_security_hint(self):
         login_response = self.client.get("/")
@@ -305,7 +323,7 @@ class CogniCookAppTests(unittest.TestCase):
         )
 
         text = response.get_data(as_text=True)
-        self.assertIn("Strict Recipe Matches", text)
+        self.assertIn("Exact Recipe Matches", text)
         self.assertIn("Simple Curry", text)
         self.assertIn("0 extras needed", text)
         self.assertIn("View Similar Recipes", text)
@@ -321,6 +339,13 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn('aria-current="page"', text)
         self.assertIn('aria-disabled="true">Previous</span>', text)
 
+    def test_pagination_clamps_page_numbers_above_last_page(self):
+        pagination = paginate_list(["one", "two", "three"], page=99, per_page=2)
+
+        self.assertEqual(pagination.page, 2)
+        self.assertEqual(pagination.items, ["three"])
+        self.assertFalse(pagination.has_next)
+
     def test_strict_matching_allows_only_common_basics_to_be_missing(self):
         self.register_user()
         self.login_user()
@@ -328,7 +353,7 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.client.get("/recommendations?ingredients=rice,onion,beans")
         text = response.get_data(as_text=True)
 
-        self.assertIn("No recipes found with given ingredients.", text)
+        self.assertIn("No exact recipes found for these ingredients.", text)
 
         with self.app.app_context():
             db.session.add(
@@ -336,12 +361,9 @@ class CogniCookAppTests(unittest.TestCase):
                     title="Rice Kanji",
                     ingredients="rice,water,salt",
                     instructions="Wash rice. Cook with water. Add salt.",
-                    cuisine="south indian",
-                    state="kerala",
                     diet_type="veg",
                     difficulty="easy",
                     cooking_time=25,
-                    servings=2,
                 )
             )
             db.session.commit()
@@ -357,7 +379,7 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.client.get("/recommendations?ingredients=spinach,lentil,beans")
         text = response.get_data(as_text=True)
 
-        self.assertIn("No recipes found with given ingredients.", text)
+        self.assertIn("No exact recipes found for these ingredients.", text)
         self.assertIn("View Similar Recipes", text)
 
     def test_similar_page_limits_results_to_one_to_three_missing_ingredients(self):
@@ -398,34 +420,25 @@ class CogniCookAppTests(unittest.TestCase):
                         title="Idli",
                         ingredients="rice,urad dal,salt,water",
                         instructions="Soak and steam.",
-                        cuisine="south indian",
-                        state="tamil nadu",
                         diet_type="veg",
                         difficulty="medium",
                         cooking_time=30,
-                        servings=4,
                     ),
                     Recipe(
                         title="Dosa",
                         ingredients="rice,urad dal,salt,water",
                         instructions="Ferment and roast.",
-                        cuisine="south indian",
-                        state="karnataka",
                         diet_type="veg",
                         difficulty="medium",
                         cooking_time=35,
-                        servings=4,
                     ),
                     Recipe(
                         title="Uttapam",
                         ingredients="rice,onion,urad dal,green chilli,salt,water",
                         instructions="Ferment batter and cook.",
-                        cuisine="south indian",
-                        state="tamil nadu",
                         diet_type="veg",
                         difficulty="medium",
                         cooking_time=35,
-                        servings=4,
                     ),
                 ]
             )
@@ -452,12 +465,9 @@ class CogniCookAppTests(unittest.TestCase):
                     title="Seasoned Water",
                     ingredients="salt,water,oil",
                     instructions="Mix and serve.",
-                    cuisine="indian",
-                    state="kerala",
                     diet_type="veg",
                     difficulty="easy",
                     cooking_time=1,
-                    servings=1,
                 )
             )
             db.session.commit()
@@ -519,7 +529,7 @@ class CogniCookAppTests(unittest.TestCase):
 
         response = self.client.get("/similar?ingredients=onion,tomato,potato")
         text = response.get_data(as_text=True)
-        self.assertIn("Back to Strict Matches", text)
+        self.assertIn("Back to Exact Matches", text)
         self.assertIn("Back to Dashboard", text)
 
     def test_favorite_redirect_rejects_external_referrer(self):
@@ -659,23 +669,17 @@ class CogniCookAppTests(unittest.TestCase):
                         "title": "Simple Curry",
                         "ingredients": "onion,tomato,potato,salt,oil",
                         "instructions": "Updated instructions.",
-                        "cuisine": "north indian",
-                        "state": "delhi",
                         "diet_type": "veg",
                         "difficulty": "easy",
                         "cooking_time": 22,
-                        "servings": 2,
                     },
                     {
                         "title": "New Dish",
                         "ingredients": "lentil,onion,salt,oil",
                         "instructions": "Cook gently.",
-                        "cuisine": "indian",
-                        "state": "kerala",
                         "diet_type": "veg",
                         "difficulty": "medium",
                         "cooking_time": 30,
-                        "servings": 4,
                     },
                 ]
             )
@@ -721,6 +725,7 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertEqual(response.headers.get("Permissions-Policy"), "camera=(), microphone=(), geolocation=()")
         self.assertIn("Content-Security-Policy", response.headers)
         self.assertIn("connect-src 'self'", response.headers["Content-Security-Policy"])
+        self.assertNotIn("'unsafe-inline'", response.headers["Content-Security-Policy"])
 
     def test_demo_seed_script_requires_explicit_confirmation(self):
         with self.assertRaisesRegex(RuntimeError, "COGNICOOK_ALLOW_DEMO_SEED=1"):
@@ -757,6 +762,37 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Step 3", text)
         self.assertIn("Serve hot.", text)
 
+    def test_recipe_detail_hides_retired_metadata_and_shows_measurement_fallback(self):
+        self.register_user()
+        self.login_user()
+
+        response = self.client.get("/recipe/1")
+        text = response.get_data(as_text=True)
+
+        self.assertIn("Ingredient Measurements", text)
+        self.assertIn("Measurement data is not available yet.", text)
+        self.assertNotIn("North Indian", text)
+        self.assertNotIn("Delhi", text)
+
+    def test_recipe_detail_renders_future_ingredient_measurements(self):
+        self.register_user()
+        self.login_user()
+
+        with self.app.app_context():
+            recipe = db.session.get(Recipe, 1)
+            recipe.ingredient_measurements = "onion: 1 cup; tomato: 2 medium"
+            db.session.commit()
+
+        response = self.client.get("/recipe/1")
+        text = response.get_data(as_text=True)
+
+        self.assertIn("Ingredient Measurements", text)
+        self.assertIn("onion", text)
+        self.assertIn("1 cup", text)
+        self.assertIn("tomato", text)
+        self.assertIn("2 medium", text)
+        self.assertNotIn("Measurement data is not available yet.", text)
+
     def test_instruction_parser_splits_dataset_style_text_into_multiple_steps(self):
         with self.app.app_context():
             recipe = Recipe(
@@ -767,12 +803,9 @@ class CogniCookAppTests(unittest.TestCase):
                     "until soft add salt mix well cook for a few more minutes turn off the stove "
                     "allow it to cool slightly and serve warm"
                 ),
-                cuisine="indian",
-                state="kerala",
                 diet_type="veg",
                 difficulty="easy",
                 cooking_time=20,
-                servings=2,
             )
 
             steps = recipe.instruction_steps()

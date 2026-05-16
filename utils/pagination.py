@@ -30,6 +30,8 @@ class SimplePagination:
 
 def paginate_list(items, page, per_page):
     total = len(items)
-    start = (page - 1) * per_page
+    pages = max(1, math.ceil(total / per_page)) if per_page else 1
+    current_page = min(max(page, 1), pages)
+    start = (current_page - 1) * per_page
     end = start + per_page
-    return SimplePagination(items[start:end], page, per_page, total)
+    return SimplePagination(items[start:end], current_page, per_page, total)
