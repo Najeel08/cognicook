@@ -20,10 +20,14 @@ from utils.validators import (
     get_positive_int,
     is_valid_email,
     is_valid_username,
+    is_safe_input,
     sanitize_choice,
     sanitize_text,
     validate_password,
 )
+
+MAX_INGREDIENT_INPUT_LENGTH = 1000
+MAX_PASSWORD_INPUT_LENGTH = 256
 
 
 def current_similar_filters():
@@ -39,7 +43,15 @@ def get_safe_redirect_target(default_endpoint, **values):
     if referrer:
         parsed = urlsplit(referrer)
         path_is_local = parsed.path.startswith("/") and not parsed.path.startswith("//")
-        if parsed.scheme in {"http", "https"} and parsed.netloc == request.host and path_is_local:
+        path_is_safe = is_safe_input(parsed.path, max_length=2048)
+        query_is_safe = is_safe_input(parsed.query, max_length=1200) and "<" not in parsed.query and ">" not in parsed.query
+        if (
+            parsed.scheme in {"http", "https"}
+            and parsed.netloc == request.host
+            and path_is_local
+            and path_is_safe
+            and query_is_safe
+        ):
             target = parsed.path
             if parsed.query:
                 target = f"{target}?{parsed.query}"
@@ -65,6 +77,13 @@ def flash_errors(errors):
         flash(error, "danger")
 
 
+def get_validated_ingredients(source):
+    ingredients_input = (source.get("ingredients") or "").strip()
+    if not is_safe_input(ingredients_input, max_length=MAX_INGREDIENT_INPUT_LENGTH) or "<" in ingredients_input or ">" in ingredients_input:
+        return None
+    return ingredients_input
+
+
 def register_routes(app):
     @app.route("/", methods=["GET", "POST"])
     def login():
@@ -73,16 +92,25 @@ def register_routes(app):
 
         if request.method == "POST":
             security_tools = current_app.extensions["security_tools"]
-            if security_tools["is_auth_rate_limited"]():
-                flash("Too many login attempts. Please wait a minute and try again.", "danger")
-                abort(429, description="Too many login attempts. Please wait a minute and try again.")
-
             email = (request.form.get("email") or "").strip().lower()
             password = request.form.get("password") or ""
 
+            if security_tools["is_auth_rate_limited"](email):
+                flash("Too many login attempts. Please wait a minute and try again.", "danger")
+                abort(429, description="Too many login attempts. Please wait a minute and try again.")
+
+            if (
+                not is_safe_input(email, max_length=254, allow_path_separators=False)
+                or not is_valid_email(email)
+                or len(password) > MAX_PASSWORD_INPUT_LENGTH
+            ):
+                security_tools["record_auth_failure"](email)
+                flash("Invalid email or password.", "danger")
+                return render_template("login_v2.html", title="Login")
+
             user = User.query.filter_by(email=email).first()
             if user and user.check_password(password):
-                security_tools["clear_auth_failures"]()
+                security_tools["clear_auth_failures"](email)
                 session.clear()
                 login_user(user)
                 session.permanent = True
@@ -90,7 +118,7 @@ def register_routes(app):
                 flash("Dashboard ready.", "success")
                 return redirect(url_for("dashboard"))
 
-            security_tools["record_auth_failure"]()
+            security_tools["record_auth_failure"](email)
             flash("Invalid email or password.", "danger")
 
         return render_template("login_v2.html", title="Login")
@@ -114,7 +142,13 @@ def register_routes(app):
             if not is_valid_email(email):
                 errors.append("Please enter a valid email address.")
 
+            if not is_safe_input(email, max_length=254, allow_path_separators=False):
+                errors.append("Please enter a valid email address.")
+
             errors.extend(validate_password(password))
+
+            if len(password) > MAX_PASSWORD_INPUT_LENGTH:
+                errors.append("Password is too long.")
 
             if password != confirm_password:
                 errors.append("Password confirmation does not match.")
@@ -146,9 +180,8 @@ def register_routes(app):
     @login_required
     def dashboard():
         if request.method == "POST":
-            ingredients_input = (request.form.get("ingredients") or "").strip()
-
-            if len(ingredients_input) > 1000:
+            ingredients_input = get_validated_ingredients(request.form)
+            if ingredients_input is None:
                 flash("Ingredient list is too long.", "warning")
                 return redirect(url_for("dashboard"))
 
@@ -164,7 +197,11 @@ def register_routes(app):
     @app.route("/recommendations", methods=["GET"])
     @login_required
     def recommendations():
-        ingredients_input = (request.args.get("ingredients") or "").strip()
+        ingredients_input = get_validated_ingredients(request.args)
+        if ingredients_input is None:
+            flash("Ingredient list is too long.", "warning")
+            return redirect(url_for("dashboard"))
+
         if not ingredients_input:
             flash("Enter at least 3 ingredients to see recommendations.", "warning")
             return redirect(url_for("dashboard"))
@@ -198,7 +235,11 @@ def register_routes(app):
     @app.route("/similar", methods=["GET"])
     @login_required
     def similar_recipes_page():
-        ingredients_input = (request.args.get("ingredients") or "").strip()
+        ingredients_input = get_validated_ingredients(request.args)
+        if ingredients_input is None:
+            flash("Ingredient list is too long.", "warning")
+            return redirect(url_for("dashboard"))
+
         if not ingredients_input:
             flash("Enter at least 3 ingredients to see recommendations.", "warning")
             return redirect(url_for("dashboard"))

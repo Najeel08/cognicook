@@ -2,6 +2,7 @@ import os
 import secrets
 import shutil
 import sqlite3
+from hashlib import sha256
 from pathlib import Path
 from time import time
 from urllib.parse import urlencode
@@ -14,8 +15,26 @@ from sqlalchemy.exc import SQLAlchemyError
 from config import Config
 from extensions import db, login_manager
 from models.auth_attempt import AuthAttempt
+from utils.validators import is_safe_input
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+ALLOWED_QUERY_PARAMS_BY_ENDPOINT = {
+    "login": set(),
+    "register": set(),
+    "dashboard": set(),
+    "recommendations": {"ingredients", "page", "per_page"},
+    "similar_recipes_page": {"ingredients", "diet", "difficulty", "sort", "page", "per_page"},
+    "favorites": {"page", "per_page"},
+    "recipe_detail": set(),
+}
+QUERY_PARAM_MAX_LENGTHS = {
+    "ingredients": 1000,
+    "page": 6,
+    "per_page": 3,
+    "diet": 20,
+    "difficulty": 20,
+    "sort": 30,
+}
 
 
 @event.listens_for(Engine, "connect")
@@ -140,12 +159,28 @@ def create_app(config_object=Config):
         session["_csrf_token"] = secrets.token_urlsafe(32)
         return session["_csrf_token"]
 
+    def allowed_query_params_for_current_endpoint():
+        return ALLOWED_QUERY_PARAMS_BY_ENDPOINT.get(request.endpoint)
+
+    def query_param_is_safe(key, value):
+        max_length = QUERY_PARAM_MAX_LENGTHS.get(key, 120)
+        return "<" not in str(value) and ">" not in str(value) and is_safe_input(value, max_length=max_length)
+
     def query_string(**updates):
-        args = request.args.to_dict(flat=True)
+        allowed_params = allowed_query_params_for_current_endpoint()
+        args = {}
+        for key, value in request.args.items():
+            if allowed_params is not None and key not in allowed_params:
+                continue
+            if query_param_is_safe(key, value):
+                args[key] = value
+
         for key, value in updates.items():
+            if allowed_params is not None and key not in allowed_params:
+                continue
             if value in (None, "", False):
                 args.pop(key, None)
-            else:
+            elif query_param_is_safe(key, value):
                 args[key] = value
         return urlencode(args)
 
@@ -168,35 +203,94 @@ def create_app(config_object=Config):
     def auth_rate_limit_key():
         return f"{request.endpoint}:{auth_rate_limit_ip()}"
 
-    def prune_auth_attempts(key=None):
-        cutoff = time() - app.config.get("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60)
+    def auth_account_lockout_key(email):
+        normalized_email = (email or "").strip().lower()
+        if not normalized_email:
+            return None
+        digest = sha256(normalized_email.encode("utf-8")).hexdigest()
+        return f"{request.endpoint}:account:{digest}"
+
+    def prune_auth_attempts(key=None, window_seconds=None):
+        cutoff = time() - (window_seconds or app.config.get("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60))
         query = db.session.query(AuthAttempt).filter(AuthAttempt.attempted_at < cutoff)
         if key is not None:
             query = query.filter(AuthAttempt.key == key)
         query.delete(synchronize_session=False)
 
-    def is_auth_rate_limited():
-        key = auth_rate_limit_key()
-        max_attempts = app.config.get("AUTH_RATE_LIMIT_MAX_ATTEMPTS", 5)
-        prune_auth_attempts(key)
+    def auth_attempt_count(key, window_seconds):
+        prune_auth_attempts(key, window_seconds)
         attempt_count = db.session.query(AuthAttempt).filter(AuthAttempt.key == key).count()
         db.session.commit()
-        return attempt_count >= max_attempts
+        return attempt_count
 
-    def record_auth_failure():
+    def is_auth_rate_limited(email=None):
         key = auth_rate_limit_key()
-        prune_auth_attempts(key)
+        max_attempts = app.config.get("AUTH_RATE_LIMIT_MAX_ATTEMPTS", 5)
+        attempt_count = auth_attempt_count(key, app.config.get("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60))
+        if attempt_count >= max_attempts:
+            return True
+
+        account_key = auth_account_lockout_key(email)
+        if not account_key:
+            return False
+
+        account_attempt_count = auth_attempt_count(
+            account_key,
+            app.config.get("AUTH_ACCOUNT_LOCKOUT_WINDOW_SECONDS", 15 * 60),
+        )
+        max_account_attempts = app.config.get("AUTH_ACCOUNT_LOCKOUT_MAX_ATTEMPTS", 5)
+        return account_attempt_count >= max_account_attempts
+
+    def record_attempt(key):
         db.session.add(AuthAttempt(key=key, attempted_at=time()))
+
+    def record_auth_failure(email=None):
+        key = auth_rate_limit_key()
+        prune_auth_attempts(key, app.config.get("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60))
+        record_attempt(key)
+
+        account_key = auth_account_lockout_key(email)
+        if account_key:
+            prune_auth_attempts(account_key, app.config.get("AUTH_ACCOUNT_LOCKOUT_WINDOW_SECONDS", 15 * 60))
+            record_attempt(account_key)
+
         db.session.commit()
 
-    def clear_auth_failures():
-        key = auth_rate_limit_key()
-        db.session.query(AuthAttempt).filter(AuthAttempt.key == key).delete(synchronize_session=False)
+    def clear_auth_failures(email=None):
+        keys = {auth_rate_limit_key()}
+        account_key = auth_account_lockout_key(email)
+        if account_key:
+            keys.add(account_key)
+        db.session.query(AuthAttempt).filter(AuthAttempt.key.in_(keys)).delete(synchronize_session=False)
         db.session.commit()
 
     def reset_auth_rate_limits():
         db.session.query(AuthAttempt).delete(synchronize_session=False)
         db.session.commit()
+
+    def validate_url_surface():
+        if not is_safe_input(request.path, max_length=2048):
+            abort(400)
+
+        allowed_params = allowed_query_params_for_current_endpoint()
+        if allowed_params is None:
+            return
+
+        for key, values in request.args.lists():
+            if (
+                key not in allowed_params
+                or len(values) != 1
+                or not is_safe_input(key, max_length=64, allow_path_separators=False)
+            ):
+                abort(400)
+
+            value = values[0]
+            if "<" in value or ">" in value or not query_param_is_safe(key, value):
+                abort(400)
+
+    @app.before_request
+    def validate_url_and_query_parameters():
+        validate_url_surface()
 
     @app.before_request
     def protect_against_csrf():

@@ -1,4 +1,5 @@
 import re
+from urllib.parse import unquote
 
 EMAIL_PATTERN = re.compile(
     r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
@@ -10,6 +11,8 @@ UPPERCASE_PATTERN = re.compile(r"[A-Z]")
 LOWERCASE_PATTERN = re.compile(r"[a-z]")
 DIGIT_PATTERN = re.compile(r"\d")
 REPEATED_CHARACTER_PATTERN = re.compile(r"(.)\1{3,}", re.IGNORECASE)
+CONTROL_CHARACTER_PATTERN = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+TRAVERSAL_SEGMENT_PATTERN = re.compile(r"(^|[\\/,&;=\s])\.\.($|[\\/,&;=\s])")
 
 COMMON_WEAK_PASSWORDS = {
     "12345678",
@@ -49,6 +52,35 @@ def get_positive_int(value, default, minimum=1, maximum=None):
         return maximum
 
     return parsed
+
+
+def decode_repeatedly(value, max_rounds=3):
+    decoded = str(value or "")
+    for _ in range(max_rounds):
+        next_value = unquote(decoded)
+        if next_value == decoded:
+            break
+        decoded = next_value
+    return decoded
+
+
+def contains_control_characters(value):
+    return bool(CONTROL_CHARACTER_PATTERN.search(str(value or "")))
+
+
+def contains_path_traversal(value):
+    normalized = decode_repeatedly(value).replace("\\", "/")
+    parts = [part for part in normalized.split("/") if part]
+    return "\x00" in normalized or any(part == ".." for part in parts) or bool(TRAVERSAL_SEGMENT_PATTERN.search(normalized))
+
+
+def is_safe_input(value, max_length=1000, allow_path_separators=True):
+    text = str(value or "")
+    if len(text) > max_length or contains_control_characters(text):
+        return False
+    if not allow_path_separators and ("/" in text or "\\" in text):
+        return False
+    return not contains_path_traversal(text)
 
 
 def sanitize_choice(value, allowed_values):

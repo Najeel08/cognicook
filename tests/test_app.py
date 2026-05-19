@@ -13,7 +13,7 @@ from extensions import db
 from models.favorite import Favorite
 from models.recipe import Recipe
 from models.user import User
-from services.data_loader import bootstrap_recipe_data, normalize_instructions, normalize_row, replace_recipe_rows
+from services.data_loader import bootstrap_recipe_data, load_dataset_rows, normalize_instructions, normalize_row, replace_recipe_rows
 from utils.ingredient_cleaner import clean_ingredients
 from utils.ingredient_measurements import parse_ingredient_measurements
 from utils.instructions import split_instruction_block
@@ -41,6 +41,8 @@ class CogniCookAppTests(unittest.TestCase):
             MAX_CONTENT_LENGTH = 1024 * 1024
             RESULTS_PER_PAGE = 2
             MAX_PER_PAGE = 10
+            AUTH_ACCOUNT_LOCKOUT_WINDOW_SECONDS = 15 * 60
+            AUTH_ACCOUNT_LOCKOUT_MAX_ATTEMPTS = 5
             AUTO_BOOTSTRAP_DATA = False
 
         cls.app = create_app(TestConfig)
@@ -626,6 +628,36 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 429)
         self.assertIn("Too many login attempts", response.get_data(as_text=True))
 
+    def test_login_account_lockout_blocks_rotating_remote_addresses(self):
+        self.register_user()
+
+        for index in range(5):
+            response = self.client.post(
+                "/",
+                data={
+                    "email": "tester@example.com",
+                    "password": "wrong-password",
+                    "csrf_token": self.get_csrf_token("/"),
+                },
+                environ_overrides={"REMOTE_ADDR": f"10.0.0.{index + 1}"},
+                follow_redirects=False,
+            )
+            self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            "/",
+            data={
+                "email": "tester@example.com",
+                "password": "SecurePass8",
+                "csrf_token": self.get_csrf_token("/"),
+            },
+            environ_overrides={"REMOTE_ADDR": "10.0.0.99"},
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertIn("Too many login attempts", response.get_data(as_text=True))
+
     def test_rate_limit_ignores_untrusted_forwarded_for_header(self):
         self.register_user()
 
@@ -711,6 +743,30 @@ class CogniCookAppTests(unittest.TestCase):
                 sorted(recipe.title for recipe in Recipe.query.all()),
                 ["Alpha Rice", "Beta Curry"],
             )
+
+    def test_dataset_loader_rejects_traversal_paths(self):
+        with self.assertRaisesRegex(ValueError, "Dataset path is invalid"):
+            load_dataset_rows("../dataset/recipes.csv")
+
+    def test_query_schema_rejects_unknown_duplicate_and_xss_parameters(self):
+        self.register_user()
+        self.login_user()
+
+        response = self.client.get("/recommendations?ingredients=onion,tomato,potato&unexpected=1")
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.get("/recommendations?ingredients=onion,tomato,potato&page=1&page=2")
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.get("/recommendations?ingredients=onion,tomato,potato%3Cscript%3E")
+        self.assertEqual(response.status_code, 400)
+
+    def test_query_schema_rejects_traversal_in_url_parameters(self):
+        self.register_user()
+        self.login_user()
+
+        response = self.client.get("/recommendations?ingredients=onion,tomato,..%2Fsecret")
+        self.assertEqual(response.status_code, 400)
 
     def test_security_headers_are_present(self):
         response = self.client.get("/")

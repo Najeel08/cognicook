@@ -7,6 +7,7 @@ from models.recipe import Recipe
 from services.recipe_service import invalidate_recipe_similarity_cache
 from utils.ingredient_cleaner import normalize_ingredient_text, normalize_search_text
 from utils.ingredient_measurements import serialize_ingredient_measurements
+from utils.validators import contains_path_traversal
 
 REQUIRED_COLUMNS = {
     "title",
@@ -16,6 +17,18 @@ REQUIRED_COLUMNS = {
     "difficulty",
     "cooking_time",
 }
+
+
+def validate_dataset_path(dataset_path):
+    raw_path = str(dataset_path or "")
+    if not raw_path or contains_path_traversal(raw_path):
+        raise ValueError("Dataset path is invalid")
+
+    path = Path(raw_path)
+    if path.suffix.lower() != ".csv":
+        raise ValueError("Dataset path must point to a CSV file")
+
+    return path
 
 
 def normalize_category(value):
@@ -104,7 +117,7 @@ def recipe_fingerprint_from_model(recipe):
 
 
 def load_dataset_rows(dataset_path):
-    path = Path(dataset_path)
+    path = validate_dataset_path(dataset_path)
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
 
