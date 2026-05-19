@@ -25,11 +25,16 @@ OUTPUT_COLUMNS = [
 
 
 def clean_dataset(input_path=DEFAULT_INPUT, output_path=DEFAULT_OUTPUT):
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+
+    if input_path.resolve() == output_path.resolve():
+        raise ValueError("Input and output paths must not refer to the same file")
+
     rows = load_dataset_rows(input_path)
     if not rows:
         raise ValueError(f"No valid rows found in {input_path}")
 
-    output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=OUTPUT_COLUMNS)

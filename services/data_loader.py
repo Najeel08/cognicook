@@ -60,14 +60,20 @@ def normalize_diet_type(value):
 
 
 def parse_int(value, default=0, minimum=0, maximum=None):
+    def fallback_value():
+        fallback = max(default, minimum)
+        if maximum is not None:
+            fallback = min(fallback, maximum)
+        return fallback
+
     try:
         parsed = int(str(value).strip())
     except (TypeError, ValueError):
-        return default
-    if parsed < minimum:
-        return default
-    if maximum is not None and parsed > maximum:
-        return default
+        return fallback_value()
+
+    if parsed < minimum or (maximum is not None and parsed > maximum):
+        return fallback_value()
+
     return parsed
 
 
@@ -96,7 +102,7 @@ def normalize_row(row):
     cooking_time = parse_int(
         row.get("cooking_time", 0),
         default=0,
-        minimum=1,
+        minimum=0,
         maximum=MAX_COOKING_TIME_MINUTES,
     )
     measurement_source = (
