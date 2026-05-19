@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<section class="glass-panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">User Activity Summary Report</p>
+      <h1>Your recipe activity</h1>
+    </div>
+    <div class="button-row">
+      <a href="{{ url_for('dashboard') }}" class="btn btn-neon-secondary btn-sm">Back to Dashboard</a>
+      <div class="stat-chip">{{ search_count }} {{ "search" if search_count == 1 else "searches" }}</div>
+      <div class="stat-chip">{{ favorite_count }} saved</div>
+    </div>
+  </div>
+
+  {% if activity_pagination.items %}
+  <div class="activity-list">
+    {% for activity in activity_pagination.items %}
+    <article class="activity-card glass-card">
+      <div>
+        <p class="eyebrow">Ingredient Search</p>
+        <h2>{{ activity.normalized_ingredients }}</h2>
+        <p class="recipe-snippet">{{ activity.ingredients }}</p>
+      </div>
+      <span class="meta-badge">{{ activity.result_count }} exact {{ "result" if activity.result_count == 1 else "results" }}</span>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <h3>No searches recorded yet.</h3>
+    <p>Your ingredient searches will appear here after you view recipe recommendations while logged in.</p>
+  </div>
+  {% endif %}
+
+  {% set pagination = activity_pagination %}
+  {% set page_param = "page" %}
+  {% include "_pagination_v2.html" %}
+</section>
+
+{% endblock %}

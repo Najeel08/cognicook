@@ -17,6 +17,25 @@ REQUIRED_COLUMNS = {
     "difficulty",
     "cooking_time",
 }
+ALLOWED_DIET_TYPES = {"veg", "non_veg"}
+ALLOWED_DIFFICULTIES = {"easy", "medium", "hard"}
+DIET_TYPE_ALIASES = {
+    "veg": "veg",
+    "vegetarian": "veg",
+    "non veg": "non_veg",
+    "non-veg": "non_veg",
+    "non vegetarian": "non_veg",
+    "non-vegetarian": "non_veg",
+    "non_veg": "non_veg",
+    "nonvegetarian": "non_veg",
+    "gluten free": "gluten_free",
+    "gluten-free": "gluten_free",
+    "gluten_free": "gluten_free",
+}
+ALLOWED_DIET_TYPES.update(DIET_TYPE_ALIASES.values())
+MAX_TITLE_LENGTH = 200
+MAX_TEXT_LENGTH = 10000
+MAX_COOKING_TIME_MINUTES = 24 * 60
 
 
 def validate_dataset_path(dataset_path):
@@ -35,12 +54,21 @@ def normalize_category(value):
     return normalize_search_text(value).lower()
 
 
-def parse_int(value, default=0):
+def normalize_diet_type(value):
+    normalized = normalize_category(value).replace("_", " ")
+    return DIET_TYPE_ALIASES.get(normalized, normalized.replace(" ", "_"))
+
+
+def parse_int(value, default=0, minimum=0, maximum=None):
     try:
         parsed = int(str(value).strip())
     except (TypeError, ValueError):
         return default
-    return max(parsed, default)
+    if parsed < minimum:
+        return default
+    if maximum is not None and parsed > maximum:
+        return default
+    return parsed
 
 
 def normalize_instructions(value):
@@ -63,6 +91,14 @@ def normalize_row(row):
     title = normalize_search_text(row.get("title", ""))
     ingredients = normalize_ingredient_text(row.get("ingredients", ""))
     instructions = normalize_instructions(row.get("instructions", ""))
+    diet_type = normalize_diet_type(row.get("diet_type", ""))
+    difficulty = normalize_category(row.get("difficulty", ""))
+    cooking_time = parse_int(
+        row.get("cooking_time", 0),
+        default=0,
+        minimum=1,
+        maximum=MAX_COOKING_TIME_MINUTES,
+    )
     measurement_source = (
         row.get("ingredient_measurements")
         or row.get("measurements")
@@ -70,7 +106,17 @@ def normalize_row(row):
         or ""
     )
 
-    if not title or not ingredients or not instructions:
+    if (
+        not title
+        or len(title) > MAX_TITLE_LENGTH
+        or not ingredients
+        or len(ingredients) > MAX_TEXT_LENGTH
+        or not instructions
+        or len(instructions) > MAX_TEXT_LENGTH
+        or diet_type not in ALLOWED_DIET_TYPES
+        or difficulty not in ALLOWED_DIFFICULTIES
+        or not cooking_time
+    ):
         return None
 
     return {
@@ -82,9 +128,9 @@ def normalize_row(row):
             measurement_source,
             known_ingredients=ingredients,
         ),
-        "diet_type": normalize_category(row.get("diet_type", "")),
-        "difficulty": normalize_category(row.get("difficulty", "")),
-        "cooking_time": parse_int(row.get("cooking_time", 0)),
+        "diet_type": diet_type,
+        "difficulty": difficulty,
+        "cooking_time": cooking_time,
     }
 
 

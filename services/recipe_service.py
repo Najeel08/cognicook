@@ -7,7 +7,7 @@ from utils.ingredient_cleaner import clean_ingredients, normalize_search_text
 from utils.pagination import paginate_list
 
 BASIC_INGREDIENTS = {"salt", "oil", "water", "sugar"}
-DIET_OPTIONS = ("veg", "non_veg")
+DIET_OPTIONS = ("veg", "non_veg", "gluten_free")
 DIFFICULTY_OPTIONS = ("easy", "medium", "hard")
 SIMILAR_SORT_OPTIONS = ("relevance", "title_asc", "title_desc", "time_asc", "time_desc")
 MIN_SIMILAR_MATCH_COUNT = 2

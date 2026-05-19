@@ -1,4 +1,5 @@
 from urllib.parse import urlsplit
+from time import time
 
 from flask import abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
@@ -7,8 +8,11 @@ from sqlalchemy.exc import IntegrityError
 from extensions import db
 from models.favorite import Favorite
 from models.recipe import Recipe
+from models.search_activity import SearchActivity
 from models.user import User
 from services.recipe_service import (
+    DIET_OPTIONS,
+    DIFFICULTY_OPTIONS,
     SIMILAR_SORT_OPTIONS,
     get_filter_options,
     get_similar_recommendations,
@@ -22,7 +26,6 @@ from utils.validators import (
     is_valid_username,
     is_safe_input,
     sanitize_choice,
-    sanitize_text,
     validate_password,
 )
 
@@ -32,8 +35,8 @@ MAX_PASSWORD_INPUT_LENGTH = 256
 
 def current_similar_filters():
     return {
-        "diet": sanitize_choice(request.args.get("diet"), {"veg", "non_veg"}),
-        "difficulty": sanitize_choice(request.args.get("difficulty"), {"easy", "medium", "hard"}),
+        "diet": sanitize_choice(request.args.get("diet"), DIET_OPTIONS),
+        "difficulty": sanitize_choice(request.args.get("difficulty"), DIFFICULTY_OPTIONS),
         "sort": sanitize_choice(request.args.get("sort"), SIMILAR_SORT_OPTIONS) or "relevance",
     }
 
@@ -70,6 +73,22 @@ def get_favorite_recipe_ids(recipe_ids):
         .filter(Favorite.user_id == current_user.id, Favorite.recipe_id.in_(recipe_ids))
         .all()
     }
+
+
+def record_search_activity(ingredients_input, normalized_ingredients, result_count, page):
+    if not current_user.is_authenticated or page != 1:
+        return
+
+    db.session.add(
+        SearchActivity(
+            user_id=current_user.id,
+            ingredients=ingredients_input,
+            normalized_ingredients=", ".join(normalized_ingredients),
+            result_count=result_count,
+            created_at=time(),
+        )
+    )
+    db.session.commit()
 
 
 def flash_errors(errors):
@@ -129,14 +148,17 @@ def register_routes(app):
             return redirect(url_for("dashboard"))
 
         if request.method == "POST":
-            username = sanitize_text(request.form.get("username"), max_length=30)
+            username = " ".join((request.form.get("username") or "").strip().split())
             email = (request.form.get("email") or "").strip().lower()
             password = request.form.get("password") or ""
             confirm_password = request.form.get("confirm_password") or ""
 
             errors = []
 
-            if not is_valid_username(username):
+            if (
+                not is_safe_input(username, max_length=30, allow_path_separators=False)
+                or not is_valid_username(username)
+            ):
                 errors.append("Username must be 3 to 30 characters and may contain letters, numbers, dots, hyphens, or underscores.")
 
             if not is_valid_email(email):
@@ -177,7 +199,6 @@ def register_routes(app):
         return render_template("register_v2.html", title="Register")
 
     @app.route("/dashboard", methods=["GET", "POST"])
-    @login_required
     def dashboard():
         if request.method == "POST":
             ingredients_input = get_validated_ingredients(request.form)
@@ -186,8 +207,8 @@ def register_routes(app):
                 return redirect(url_for("dashboard"))
 
             cleaned_ingredients = clean_ingredients(ingredients_input)
-            if len(cleaned_ingredients) < 3:
-                flash("Enter at least 3 ingredients to see recommendations.", "warning")
+            if not cleaned_ingredients:
+                flash("Enter at least one valid ingredient to see recommendations.", "warning")
                 return redirect(url_for("dashboard"))
 
             return redirect(url_for("recommendations", ingredients=ingredients_input))
@@ -195,7 +216,6 @@ def register_routes(app):
         return render_template("dashboard_home.html", title="Dashboard")
 
     @app.route("/recommendations", methods=["GET"])
-    @login_required
     def recommendations():
         ingredients_input = get_validated_ingredients(request.args)
         if ingredients_input is None:
@@ -203,12 +223,12 @@ def register_routes(app):
             return redirect(url_for("dashboard"))
 
         if not ingredients_input:
-            flash("Enter at least 3 ingredients to see recommendations.", "warning")
+            flash("Enter at least one ingredient to see recommendations.", "warning")
             return redirect(url_for("dashboard"))
 
         normalized_ingredients = clean_ingredients(ingredients_input)
-        if len(normalized_ingredients) < 3:
-            flash("Please enter at least 3 valid ingredients to get suggestions.", "warning")
+        if not normalized_ingredients:
+            flash("Please enter at least one valid ingredient to get suggestions.", "warning")
             return redirect(url_for("dashboard"))
 
         page = get_positive_int(request.args.get("page"), default=1, maximum=999)
@@ -219,6 +239,12 @@ def register_routes(app):
         )
 
         recommendation_data = get_strict_recommendations(ingredients_input, page=page, per_page=per_page)
+        record_search_activity(
+            ingredients_input,
+            recommendation_data["ingredients"],
+            recommendation_data["strict"].total,
+            page,
+        )
         recipe_ids = {recipe.id for recipe in recommendation_data["strict"].items}
         favorite_recipe_ids = get_favorite_recipe_ids(recipe_ids)
 
@@ -233,7 +259,6 @@ def register_routes(app):
         )
 
     @app.route("/similar", methods=["GET"])
-    @login_required
     def similar_recipes_page():
         ingredients_input = get_validated_ingredients(request.args)
         if ingredients_input is None:
@@ -241,12 +266,12 @@ def register_routes(app):
             return redirect(url_for("dashboard"))
 
         if not ingredients_input:
-            flash("Enter at least 3 ingredients to see recommendations.", "warning")
+            flash("Enter at least one ingredient to see recommendations.", "warning")
             return redirect(url_for("dashboard"))
 
         normalized_ingredients = clean_ingredients(ingredients_input)
-        if len(normalized_ingredients) < 3:
-            flash("Please enter at least 3 valid ingredients to get suggestions.", "warning")
+        if not normalized_ingredients:
+            flash("Please enter at least one valid ingredient to get suggestions.", "warning")
             return redirect(url_for("dashboard"))
 
         filters = current_similar_filters()
@@ -305,6 +330,33 @@ def register_routes(app):
             per_page=per_page,
         )
 
+    @app.route("/activity", methods=["GET"])
+    @login_required
+    def activity_summary():
+        page = get_positive_int(request.args.get("page"), default=1, maximum=999)
+        per_page = get_positive_int(
+            request.args.get("per_page"),
+            default=current_app.config["RESULTS_PER_PAGE"],
+            maximum=current_app.config["MAX_PER_PAGE"],
+        )
+
+        favorite_count = Favorite.query.filter_by(user_id=current_user.id).count()
+        activities = (
+            SearchActivity.query.filter_by(user_id=current_user.id)
+            .order_by(SearchActivity.created_at.desc())
+            .all()
+        )
+        activity_pagination = paginate_list(activities, page, per_page)
+
+        return render_template(
+            "activity_summary.html",
+            title="Activity Summary",
+            activity_pagination=activity_pagination,
+            search_count=len(activities),
+            favorite_count=favorite_count,
+            per_page=per_page,
+        )
+
     @app.route("/favorite/<int:recipe_id>", methods=["POST"])
     @login_required
     def favorite(recipe_id):
@@ -342,10 +394,12 @@ def register_routes(app):
         return redirect(get_safe_redirect_target("favorites"))
 
     @app.route("/recipe/<int:recipe_id>")
-    @login_required
     def recipe_detail(recipe_id):
         recipe = db.get_or_404(Recipe, recipe_id)
-        is_favorite = Favorite.query.filter_by(user_id=current_user.id, recipe_id=recipe.id).first() is not None
+        is_favorite = (
+            current_user.is_authenticated
+            and Favorite.query.filter_by(user_id=current_user.id, recipe_id=recipe.id).first() is not None
+        )
         return render_template(
             "recipe_view.html",
             title=recipe.title,

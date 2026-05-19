@@ -26,7 +26,7 @@
       <p class="eyebrow">Exact Results</p>
       <h2>Recipe matches</h2>
     </div>
-    <div class="stat-chip">{{ strict_pagination.total }} results</div>
+    <div class="stat-chip">{{ strict_pagination.total }} {{ "result" if strict_pagination.total == 1 else "results" }}</div>
   </div>
 
   {% if strict_pagination.items %}
@@ -45,6 +45,7 @@
         <span>{{ recipe.cooking_time or 0 }} min</span>
         <div class="button-row">
           <a href="{{ url_for('recipe_detail', recipe_id=recipe.id) }}" class="btn btn-neon-secondary btn-sm">View</a>
+          {% if current_user.is_authenticated %}
           <form method="POST" action="{{ url_for('favorite', recipe_id=recipe.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
             {% if recipe.id in favorite_recipe_ids %}
@@ -53,6 +54,9 @@
             <button type="submit" class="btn btn-neon-primary btn-sm" aria-label="Save {{ recipe.title }} to favorites">Save</button>
             {% endif %}
           </form>
+          {% else %}
+          <a href="{{ url_for('login') }}" class="btn btn-neon-primary btn-sm">Log in to Save</a>
+          {% endif %}
         </div>
       </div>
     </article>

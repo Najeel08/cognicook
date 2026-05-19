@@ -1,6 +1,5 @@
 import os
 import secrets
-import shutil
 import sqlite3
 from hashlib import sha256
 from pathlib import Path
@@ -25,7 +24,11 @@ ALLOWED_QUERY_PARAMS_BY_ENDPOINT = {
     "recommendations": {"ingredients", "page", "per_page"},
     "similar_recipes_page": {"ingredients", "diet", "difficulty", "sort", "page", "per_page"},
     "favorites": {"page", "per_page"},
+    "activity_summary": {"page", "per_page"},
+    "favorite": set(),
+    "remove_favorite": set(),
     "recipe_detail": set(),
+    "logout": set(),
 }
 QUERY_PARAM_MAX_LENGTHS = {
     "ingredients": 1000,
@@ -91,17 +94,11 @@ def choose_recovered_database_path(database_path):
 
 def prepare_database_file(app):
     database_file = app.config.get("DATABASE_FILE")
-    legacy_database_file = app.config.get("LEGACY_DATABASE_FILE")
     if not database_file:
         return
 
     database_path = Path(database_file)
     database_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if not database_path.exists() and legacy_database_file:
-        legacy_path = Path(legacy_database_file)
-        if legacy_path.exists():
-            shutil.copy2(legacy_path, database_path)
 
     if database_path.exists() and not sqlite_file_is_usable(database_path):
         recovered_path = choose_recovered_database_path(database_path)
@@ -311,9 +308,14 @@ def create_app(config_object=Config):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-        response.headers["Pragma"] = "no-cache"
-        response.headers["Expires"] = "0"
+        if request.endpoint == "static":
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            response.headers.pop("Pragma", None)
+            response.headers.pop("Expires", None)
+        else:
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
@@ -345,6 +347,7 @@ def create_app(config_object=Config):
     with app.app_context():
         from models.favorite import Favorite
         from models.recipe import Recipe
+        from models.search_activity import SearchActivity
         from models.user import User
 
         db.create_all()

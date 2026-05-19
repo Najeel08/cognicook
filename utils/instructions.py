@@ -2,6 +2,7 @@ import re
 
 SENTENCE_BOUNDARY_PATTERN = re.compile(r"(?<=[.!?])\s+")
 BULLET_PREFIX_PATTERN = re.compile(r"^\s*(?:[-*]|\d+[.)])\s*")
+STEP_PREFIX_PATTERN = re.compile(r"^\s*step\s*\d+\s*[:.)-]\s*", re.IGNORECASE)
 LEADING_SEQUENCE_PATTERN = re.compile(
     r"^(?:and|first|next|then|now|meanwhile|finally|lastly|afterward|afterwards|subsequently)\s+",
     re.IGNORECASE,
@@ -24,6 +25,7 @@ CONNECTOR_ACTION_PATTERN = re.compile(
 
 def clean_instruction_fragment(value):
     text = BULLET_PREFIX_PATTERN.sub("", str(value or "").strip())
+    text = STEP_PREFIX_PATTERN.sub("", text)
     text = LEADING_SEQUENCE_PATTERN.sub("", text)
     text = re.sub(r"\s+", " ", text).strip(" ,;:")
     return TRAILING_CONNECTOR_PATTERN.sub("", text).strip(" ,;:")

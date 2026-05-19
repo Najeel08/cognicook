@@ -23,10 +23,10 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
       <label class="field-label" for="email">Email address</label>
-      <input id="email" type="email" name="email" class="form-control" placeholder="you@example.com" autocomplete="email" required />
+      <input id="email" type="email" name="email" class="form-control" placeholder="you@example.com" autocomplete="email" maxlength="254" required />
 
       <label class="field-label" for="password">Password</label>
-      <input id="password" type="password" name="password" class="form-control" placeholder="Enter your password" autocomplete="current-password" required />
+      <input id="password" type="password" name="password" class="form-control" placeholder="Enter your password" autocomplete="current-password" maxlength="256" required />
 
       <button type="submit" class="btn btn-neon-primary w-100 mt-3">Login</button>
     </form>

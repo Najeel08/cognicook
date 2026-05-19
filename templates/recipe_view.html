@@ -66,7 +66,9 @@
 
         <a href="{{ back_url }}" class="btn btn-neon-secondary w-100">Back</a>
         <a href="{{ url_for('dashboard') }}" class="btn btn-neon-secondary w-100">Back to Dashboard</a>
+        {% if current_user.is_authenticated %}
         <a href="{{ url_for('favorites') }}" class="btn btn-neon-secondary w-100">Open Favorites</a>
+        {% endif %}
       </div>
     </div>
 

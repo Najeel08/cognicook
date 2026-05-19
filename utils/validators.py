@@ -91,13 +91,6 @@ def sanitize_choice(value, allowed_values):
     return normalized if normalized in allowed_values else ""
 
 
-def sanitize_text(value, max_length=120):
-    if not value:
-        return ""
-    text = " ".join(value.strip().split())
-    return text[:max_length]
-
-
 def is_valid_email(value):
     email = (value or "").strip()
     if len(email) > 254 or ".." in email:

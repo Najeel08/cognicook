@@ -6,7 +6,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 INSTANCE_PATH = Path(os.environ.get("COGNICOOK_DATA_DIR") or (BASE_DIR / "instance"))
 DATABASE_PATH = Path(os.environ.get("COGNICOOK_DB_PATH") or (INSTANCE_PATH / "cognicook.db"))
-LEGACY_DATABASE_PATH = BASE_DIR / "database" / "cognicook.db"
+DATASET_PATH = Path(os.environ.get("COGNICOOK_DATASET_PATH") or (BASE_DIR / "dataset" / "recipes.csv"))
 APP_ENV = os.environ.get("COGNICOOK_ENV", os.environ.get("FLASK_ENV", "development")).strip().lower()
 DEFAULT_SECURE_COOKIE = "1" if APP_ENV == "production" else "0"
 SECRET_KEY = os.environ.get("SECRET_KEY")
@@ -32,7 +32,6 @@ class Config:
     SECRET_KEY_FROM_ENV = SECRET_KEY_FROM_ENV
     REQUIRE_SECRET_KEY_FROM_ENV = APP_ENV == "production"
     DATABASE_FILE = DATABASE_PATH.as_posix()
-    LEGACY_DATABASE_FILE = LEGACY_DATABASE_PATH.as_posix()
     SQLALCHEMY_DATABASE_URI = f"sqlite:///{DATABASE_PATH.as_posix()}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SESSION_COOKIE_HTTPONLY = True
@@ -43,7 +42,7 @@ class Config:
     REMEMBER_COOKIE_SECURE = SESSION_COOKIE_SECURE
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
     MAX_CONTENT_LENGTH = 1024 * 1024
-    DATASET_PATH = str(BASE_DIR / "dataset" / "recipes.csv")
+    DATASET_PATH = DATASET_PATH.as_posix()
     AUTO_BOOTSTRAP_DATA = os.environ.get("AUTO_BOOTSTRAP_DATA", "1") == "1"
     RESULTS_PER_PAGE = 12
     MAX_PER_PAGE = 24

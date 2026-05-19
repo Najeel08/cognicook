@@ -741,6 +741,19 @@ h3 {
     grid-template-columns: repeat(1, minmax(0, 1fr));
 }
 
+.activity-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.activity-card {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
 .recipe-card {
     display: flex;
     flex-direction: column;

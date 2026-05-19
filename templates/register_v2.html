@@ -23,16 +23,16 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
       <label class="field-label" for="username">Username</label>
-      <input id="username" type="text" name="username" class="form-control" placeholder="Choose a username" autocomplete="username" required />
+      <input id="username" type="text" name="username" class="form-control" placeholder="Choose a username" autocomplete="username" minlength="3" maxlength="30" required />
 
       <label class="field-label" for="email">Email address</label>
-      <input id="email" type="email" name="email" class="form-control" placeholder="you@example.com" autocomplete="email" required />
+      <input id="email" type="email" name="email" class="form-control" placeholder="you@example.com" autocomplete="email" maxlength="254" required />
 
       <label class="field-label" for="password">Password</label>
-      <input id="password" type="password" name="password" class="form-control" placeholder="At least 8 characters" autocomplete="new-password" minlength="8" required />
+      <input id="password" type="password" name="password" class="form-control" placeholder="At least 8 characters" autocomplete="new-password" minlength="8" maxlength="256" required />
 
       <label class="field-label" for="confirm_password">Confirm password</label>
-      <input id="confirm_password" type="password" name="confirm_password" class="form-control" placeholder="Retype your password" autocomplete="new-password" minlength="8" required />
+      <input id="confirm_password" type="password" name="confirm_password" class="form-control" placeholder="Retype your password" autocomplete="new-password" minlength="8" maxlength="256" required />
 
       <div id="register-validation" class="validation-card d-none" aria-live="polite"></div>
       <div class="password-rules">
