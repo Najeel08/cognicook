@@ -132,11 +132,25 @@ COMPOUND_INGREDIENTS = {
     "ginger-garlic": ("ginger", "garlic"),
 }
 
+PROTECTED_INGREDIENTS = {
+    "green gram": "greengramingredient",
+    "black gram": "blackgramingredient",
+    "horse gram": "horsegramingredient",
+    "bengal gram": "bengalgramingredient",
+}
+PROTECTED_INGREDIENT_ALIASES = {
+    placeholder: ingredient
+    for ingredient, placeholder in PROTECTED_INGREDIENTS.items()
+}
+
 REMOVE_WORDS_PATTERN = re.compile(
     r"\b(?:%s)\b" % "|".join(re.escape(word) for word in sorted(REMOVE_WORDS, key=len, reverse=True))
 )
 PLURAL_PATTERN = re.compile(
     r"\b(?:%s)\b" % "|".join(re.escape(word) for word in sorted(PLURAL_MAP, key=len, reverse=True))
+)
+PROTECTED_INGREDIENTS_PATTERN = re.compile(
+    r"\b(?:%s)\b" % "|".join(re.escape(word) for word in sorted(PROTECTED_INGREDIENTS, key=len, reverse=True))
 )
 SPLIT_PATTERN = re.compile(r"\s*(?:,|;|\n|\r|\band\b|\bor\b)\s*", re.IGNORECASE)
 
@@ -152,6 +166,7 @@ def normalize_ingredient_tokens(value):
     text = str(value).lower()
     text = text.replace("&", " and ")
     text = re.sub(r"[-/]", " ", text)
+    text = PROTECTED_INGREDIENTS_PATTERN.sub(lambda match: PROTECTED_INGREDIENTS[match.group(0)], text)
     text = PLURAL_PATTERN.sub(lambda match: PLURAL_MAP[match.group(0)], text)
     text = REMOVE_WORDS_PATTERN.sub("", text)
     text = re.sub(r"[^a-zA-Z,;\n\r ]", "", text)
@@ -164,6 +179,10 @@ def normalize_ingredient_tokens(value):
 
         if ingredient in COMPOUND_INGREDIENTS:
             ingredients.extend(COMPOUND_INGREDIENTS[ingredient])
+            continue
+
+        if ingredient in PROTECTED_INGREDIENT_ALIASES:
+            ingredients.append(PROTECTED_INGREDIENT_ALIASES[ingredient])
             continue
 
         ingredients.append(INGREDIENT_ALIASES.get(ingredient, ingredient))

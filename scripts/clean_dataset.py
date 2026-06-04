@@ -16,6 +16,7 @@ DEFAULT_OUTPUT = BASE_DIR / "dataset" / "recipes.csv"
 OUTPUT_COLUMNS = [
     "title",
     "ingredients",
+    "cleaned_ingredients",
     "ingredient_measurements",
     "instructions",
     "diet_type",

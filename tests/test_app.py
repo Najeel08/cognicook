@@ -14,6 +14,7 @@ from models.recipe import Recipe
 from models.search_activity import SearchActivity
 from models.user import User
 from services.data_loader import bootstrap_recipe_data, load_dataset_rows, normalize_instructions, normalize_row, replace_recipe_rows
+from services.recipe_service import get_similar_recommendations, get_strict_recommendations, parse_ingredient_query
 from utils.ingredient_cleaner import clean_ingredients
 from utils.ingredient_measurements import parse_ingredient_measurements
 from utils.instructions import split_instruction_block
@@ -197,6 +198,29 @@ class CogniCookAppTests(unittest.TestCase):
         with self.app.app_context():
             self.assertIsNone(User.query.filter_by(email="tester@example.com").first())
 
+    def test_registration_rate_limit_blocks_repeated_invalid_submissions(self):
+        original_ip_limit = self.app.config.get("AUTH_REGISTER_RATE_LIMIT_MAX_ATTEMPTS")
+        original_account_limit = self.app.config.get("AUTH_REGISTER_ACCOUNT_LOCKOUT_MAX_ATTEMPTS")
+        self.app.config["AUTH_REGISTER_RATE_LIMIT_MAX_ATTEMPTS"] = 2
+        self.app.config["AUTH_REGISTER_ACCOUNT_LOCKOUT_MAX_ATTEMPTS"] = 2
+        try:
+            for _ in range(2):
+                response = self.register_user(email="invalid-email")
+                self.assertEqual(response.status_code, 200)
+
+            response = self.register_user(email="invalid-email")
+            self.assertEqual(response.status_code, 429)
+            self.assertIn("Too many registration attempts", response.get_data(as_text=True))
+        finally:
+            if original_ip_limit is None:
+                self.app.config.pop("AUTH_REGISTER_RATE_LIMIT_MAX_ATTEMPTS", None)
+            else:
+                self.app.config["AUTH_REGISTER_RATE_LIMIT_MAX_ATTEMPTS"] = original_ip_limit
+            if original_account_limit is None:
+                self.app.config.pop("AUTH_REGISTER_ACCOUNT_LOCKOUT_MAX_ATTEMPTS", None)
+            else:
+                self.app.config["AUTH_REGISTER_ACCOUNT_LOCKOUT_MAX_ATTEMPTS"] = original_account_limit
+
     def test_register_and_login_flow_uses_expected_success_message(self):
         response = self.register_user(email="USER@Example.com")
         self.assertEqual(response.status_code, 200)
@@ -265,6 +289,10 @@ class CogniCookAppTests(unittest.TestCase):
             clean_ingredients("1 cup rice, 2 tbsp oil, 250 grams tomatoes"),
             ["rice", "oil", "tomato"],
         )
+        self.assertEqual(
+            clean_ingredients("2 cups green gram, 250 grams tomatoes"),
+            ["green gram", "tomato"],
+        )
 
     def test_instruction_parser_preserves_single_action_phrases(self):
         self.assertEqual(
@@ -309,10 +337,31 @@ class CogniCookAppTests(unittest.TestCase):
         )
 
         records = parse_ingredient_measurements(row["ingredient_measurements"])
+        self.assertEqual(row["cleaned_ingredients"], "onion,tomato,salt")
         self.assertEqual(records[0].ingredient, "onion")
         self.assertEqual(records[0].display_measurement, "1 cup")
         self.assertEqual(records[1].ingredient, "tomato")
         self.assertEqual(records[1].display_measurement, "2 medium")
+
+    def test_recipe_model_keeps_cleaned_ingredients_in_sync(self):
+        with self.app.app_context():
+            recipe = Recipe(
+                title="Sync Demo",
+                ingredients="Tomatoes, finely chopped onions, salt",
+                instructions="Cook everything.",
+                diet_type="veg",
+                difficulty="easy",
+                cooking_time=15,
+            )
+            db.session.add(recipe)
+            db.session.commit()
+
+            self.assertEqual(recipe.cleaned_ingredients, "tomato,onion,salt")
+
+            recipe.ingredients = "ginger garlic paste, curd, cumin"
+            db.session.commit()
+
+            self.assertEqual(recipe.cleaned_ingredients, "ginger,garlic,yogurt,cumin seeds")
 
     def test_data_loader_accepts_proposal_diet_labels(self):
         vegetarian = normalize_row(
@@ -375,6 +424,147 @@ class CogniCookAppTests(unittest.TestCase):
             activity = SearchActivity.query.first()
             self.assertEqual(activity.normalized_ingredients, "onion, tomato, potato")
             self.assertEqual(activity.result_count, 1)
+
+    def test_free_text_ingredient_query_splits_known_ingredients(self):
+        with self.app.app_context():
+            db.session.add(
+                Recipe(
+                    title="Chicken Demo",
+                    ingredients="chicken,onion,tomato,salt,oil",
+                    instructions="Cook chicken.",
+                    diet_type="non_veg",
+                    difficulty="easy",
+                    cooking_time=20,
+                )
+            )
+            db.session.commit()
+
+            ingredients, normalized_text = parse_ingredient_query("chicken onion tomato")
+
+        self.assertEqual(ingredients, ["chicken", "onion", "tomato"])
+        self.assertEqual(normalized_text, "chicken, onion, tomato")
+
+    def test_strict_recommendations_rank_more_complete_exact_matches_first(self):
+        with self.app.app_context():
+            db.session.add_all(
+                [
+                    Recipe(
+                        title="Onion Tomato Curry",
+                        ingredients="onion,tomato,salt,oil",
+                        instructions="Cook onion and tomato.",
+                        diet_type="veg",
+                        difficulty="easy",
+                        cooking_time=15,
+                    ),
+                    Recipe(
+                        title="Chicken Onion Tomato Curry",
+                        ingredients="chicken,onion,tomato,salt,oil",
+                        instructions="Cook chicken with onion and tomato.",
+                        diet_type="non_veg",
+                        difficulty="easy",
+                        cooking_time=25,
+                    ),
+                ]
+            )
+            db.session.commit()
+
+            results = get_strict_recommendations("chicken onion tomato", page=1, per_page=10)
+            titles = [recipe.title for recipe in results["strict"].items]
+
+        self.assertLess(titles.index("Chicken Onion Tomato Curry"), titles.index("Onion Tomato Curry"))
+
+    def test_similar_recommendations_prioritize_exact_title_intent(self):
+        with self.app.app_context():
+            db.session.add_all(
+                [
+                    Recipe(
+                        title="Egg Roast",
+                        ingredients="egg,onion,tomato,green chilli,ginger,garlic,curry leaves,coconut oil,chilli powder,coriander powder,turmeric powder,garam masala,salt",
+                        instructions="Roast boiled eggs in masala.",
+                        diet_type="non_veg",
+                        difficulty="easy",
+                        cooking_time=35,
+                    ),
+                    Recipe(
+                        title="Egg Curry",
+                        ingredients="egg,onion,tomato,green chilli,ginger,garlic,curry leaves,coconut oil,coconut milk,chilli powder,coriander powder,turmeric powder,garam masala,salt,water",
+                        instructions="Cook eggs in curry.",
+                        diet_type="non_veg",
+                        difficulty="easy",
+                        cooking_time=40,
+                    ),
+                ]
+            )
+            db.session.commit()
+
+            results = get_similar_recommendations(
+                "egg roast",
+                {"diet": None, "difficulty": None, "sort": "relevance"},
+                page=1,
+                per_page=10,
+            )
+            titles = [item["recipe"].title for item in results["similar"].items]
+
+        self.assertIn("Egg Roast", titles)
+        self.assertEqual(titles[0], "Egg Roast")
+
+    def test_similar_recommendations_include_short_primary_ingredient_queries(self):
+        with self.app.app_context():
+            db.session.add(
+                Recipe(
+                    title="Chicken Roast",
+                    ingredients="chicken,onion,tomato,green chilli,ginger,garlic,curry leaves,chilli powder,coriander powder,turmeric powder,garam masala,salt,oil",
+                    instructions="Roast chicken with masala.",
+                    diet_type="non_veg",
+                    difficulty="medium",
+                    cooking_time=45,
+                )
+            )
+            db.session.commit()
+
+            results = get_similar_recommendations(
+                "chicken curry",
+                {"diet": None, "difficulty": None, "sort": "relevance"},
+                page=1,
+                per_page=10,
+            )
+            titles = [item["recipe"].title for item in results["similar"].items]
+
+        self.assertIn("Chicken Roast", titles)
+
+    def test_similar_recommendations_rank_complete_query_matches_above_partial_matches(self):
+        with self.app.app_context():
+            db.session.add_all(
+                [
+                    Recipe(
+                        title="Chicken Onion Tomato Masala",
+                        ingredients="chicken,onion,tomato,ginger,garlic,curry leaves,chilli powder,salt,oil",
+                        instructions="Cook chicken with onion and tomato.",
+                        diet_type="non_veg",
+                        difficulty="medium",
+                        cooking_time=35,
+                    ),
+                    Recipe(
+                        title="Onion Tomato Masala",
+                        ingredients="onion,tomato,ginger,salt,oil",
+                        instructions="Cook onion and tomato.",
+                        diet_type="veg",
+                        difficulty="easy",
+                        cooking_time=20,
+                    ),
+                ]
+            )
+            db.session.commit()
+
+            results = get_similar_recommendations(
+                "chicken onion tomato",
+                {"diet": None, "difficulty": None, "sort": "relevance"},
+                page=1,
+                per_page=10,
+            )
+            titles = [item["recipe"].title for item in results["similar"].items]
+
+        self.assertLess(titles.index("Chicken Onion Tomato Masala"), titles.index("Onion Tomato Masala"))
 
     def test_recipe_discovery_is_available_before_login_but_save_requires_login(self):
         response = self.client.get("/recommendations?ingredients=onion,tomato,potato")
@@ -855,10 +1045,72 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertEqual(response.headers.get("Expires"), "0")
         self.assertEqual(response.headers.get("Cross-Origin-Opener-Policy"), "same-origin")
         self.assertEqual(response.headers.get("Cross-Origin-Resource-Policy"), "same-origin")
+        self.assertEqual(response.headers.get("X-Permitted-Cross-Domain-Policies"), "none")
         self.assertEqual(response.headers.get("Permissions-Policy"), "camera=(), microphone=(), geolocation=()")
         self.assertIn("Content-Security-Policy", response.headers)
         self.assertIn("connect-src 'self'", response.headers["Content-Security-Policy"])
         self.assertNotIn("'unsafe-inline'", response.headers["Content-Security-Policy"])
+
+    def test_hsts_header_is_configurable_for_production_like_environments(self):
+        original_enabled = self.app.config.get("SECURITY_HSTS_ENABLED")
+        original_max_age = self.app.config.get("SECURITY_HSTS_MAX_AGE")
+        self.app.config["SECURITY_HSTS_ENABLED"] = True
+        self.app.config["SECURITY_HSTS_MAX_AGE"] = 123
+        try:
+            response = self.client.get("/")
+            self.assertEqual(
+                response.headers.get("Strict-Transport-Security"),
+                "max-age=123; includeSubDomains",
+            )
+        finally:
+            if original_enabled is None:
+                self.app.config.pop("SECURITY_HSTS_ENABLED", None)
+            else:
+                self.app.config["SECURITY_HSTS_ENABLED"] = original_enabled
+            if original_max_age is None:
+                self.app.config.pop("SECURITY_HSTS_MAX_AGE", None)
+            else:
+                self.app.config["SECURITY_HSTS_MAX_AGE"] = original_max_age
+
+    def test_trusted_hosts_reject_unexpected_host_headers(self):
+        original_trusted_hosts = self.app.config.get("TRUSTED_HOSTS")
+        self.app.config["TRUSTED_HOSTS"] = ["good.test"]
+        try:
+            response = self.client.get("/", headers={"Host": "evil.test"})
+            self.assertEqual(response.status_code, 400)
+
+            response = self.client.get("/", headers={"Host": "good.test"})
+            self.assertEqual(response.status_code, 200)
+        finally:
+            if original_trusted_hosts is None:
+                self.app.config.pop("TRUSTED_HOSTS", None)
+            else:
+                self.app.config["TRUSTED_HOSTS"] = original_trusted_hosts
+
+    def test_method_not_allowed_uses_consistent_error_view(self):
+        response = self.client.get("/logout")
+        text = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 405)
+        self.assertIn("Method Not Allowed", text)
+        self.assertIn("This action is not available for the requested method.", text)
+
+    def test_request_too_large_uses_consistent_error_view(self):
+        original_limit = self.app.config.get("MAX_CONTENT_LENGTH")
+        self.app.config["MAX_CONTENT_LENGTH"] = 64
+        try:
+            response = self.client.post(
+                "/dashboard",
+                data={"ingredients": "x" * 512, "csrf_token": "token"},
+                follow_redirects=False,
+            )
+            text = response.get_data(as_text=True)
+
+            self.assertEqual(response.status_code, 413)
+            self.assertIn("Request Too Large", text)
+            self.assertIn("The submitted data is too large.", text)
+        finally:
+            self.app.config["MAX_CONTENT_LENGTH"] = original_limit
 
     def test_static_assets_are_cacheable_but_keep_security_headers(self):
         response = self.client.get("/static/js/theme-init.js")

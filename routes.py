@@ -148,10 +148,15 @@ def register_routes(app):
             return redirect(url_for("dashboard"))
 
         if request.method == "POST":
+            security_tools = current_app.extensions["security_tools"]
             username = " ".join((request.form.get("username") or "").strip().split())
             email = (request.form.get("email") or "").strip().lower()
             password = request.form.get("password") or ""
             confirm_password = request.form.get("confirm_password") or ""
+
+            if security_tools["is_auth_rate_limited"](email):
+                flash("Too many registration attempts. Please wait a minute and try again.", "danger")
+                abort(429, description="Too many registration attempts. Please wait a minute and try again.")
 
             errors = []
 
@@ -179,6 +184,7 @@ def register_routes(app):
                 errors.append("Email already registered. Please use a different email address.")
 
             if errors:
+                security_tools["record_auth_failure"](email)
                 flash_errors(errors)
                 return redirect(url_for("register"))
 
@@ -190,9 +196,11 @@ def register_routes(app):
                 db.session.commit()
             except IntegrityError:
                 db.session.rollback()
+                security_tools["record_auth_failure"](email)
                 flash("Email already registered. Please use a different email address.", "danger")
                 return redirect(url_for("register"))
 
+            security_tools["clear_auth_failures"](email)
             flash("Registration successful. Account created successfully. Please log in.", "success")
             return redirect(url_for("login"))
 

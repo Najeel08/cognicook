@@ -1,3 +1,5 @@
+from sqlalchemy import event
+
 from extensions import db
 from utils.ingredient_cleaner import normalize_ingredient_text, normalize_ingredient_tokens
 from utils.ingredient_measurements import parse_ingredient_measurements
@@ -14,6 +16,7 @@ class Recipe(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     ingredients = db.Column(db.Text, nullable=False)
+    cleaned_ingredients = db.Column(db.Text, nullable=False, default="")
     instructions = db.Column(db.Text, nullable=False)
     diet_type = db.Column(db.String(50))
     difficulty = db.Column(db.String(50))
@@ -21,11 +24,7 @@ class Recipe(db.Model):
     ingredient_measurements = db.Column(db.Text)
 
     def ingredient_list(self):
-        return normalize_ingredient_tokens(self.ingredients)
-
-    @property
-    def cleaned_ingredients(self):
-        return normalize_ingredient_text(self.ingredients)
+        return normalize_ingredient_tokens(self.cleaned_ingredients or self.ingredients)
 
     def instruction_steps(self):
         return split_instruction_block(self.instructions)
@@ -39,3 +38,9 @@ class Recipe(db.Model):
     @property
     def has_ingredient_measurements(self):
         return bool(self.ingredient_measurement_list())
+
+
+@event.listens_for(Recipe, "before_insert")
+@event.listens_for(Recipe, "before_update")
+def sync_cleaned_ingredients(_mapper, _connection, recipe):
+    recipe.cleaned_ingredients = normalize_ingredient_text(recipe.ingredients)

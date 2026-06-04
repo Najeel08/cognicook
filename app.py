@@ -10,10 +10,12 @@ from flask import Flask, abort, flash, redirect, render_template, request, sessi
 from sqlalchemy import event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.exceptions import SecurityError
 
 from config import Config
 from extensions import db, login_manager
 from models.auth_attempt import AuthAttempt
+from utils.ingredient_cleaner import normalize_ingredient_text
 from utils.validators import is_safe_input
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
@@ -112,18 +114,36 @@ def prepare_database_file(app):
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{recovered_path.as_posix()}"
 
 
-def ensure_recipe_measurement_schema():
+def ensure_recipe_schema():
     inspector = inspect(db.engine)
     if not inspector.has_table("recipe"):
         return
 
     column_names = {column["name"] for column in inspector.get_columns("recipe")}
-    if "ingredient_measurements" in column_names:
-        return
-
-    # Keep existing SQLite databases compatible until the project adopts migrations.
     with db.engine.begin() as connection:
-        connection.execute(text("ALTER TABLE recipe ADD COLUMN ingredient_measurements TEXT"))
+        # Keep existing SQLite databases compatible until the project adopts migrations.
+        if "cleaned_ingredients" not in column_names:
+            connection.execute(
+                text("ALTER TABLE recipe ADD COLUMN cleaned_ingredients TEXT NOT NULL DEFAULT ''")
+            )
+
+        if "ingredient_measurements" not in column_names:
+            connection.execute(text("ALTER TABLE recipe ADD COLUMN ingredient_measurements TEXT"))
+
+        rows = connection.execute(
+            text(
+                "SELECT id, ingredients FROM recipe "
+                "WHERE cleaned_ingredients IS NULL OR cleaned_ingredients = ''"
+            )
+        ).mappings()
+        for row in rows:
+            connection.execute(
+                text("UPDATE recipe SET cleaned_ingredients = :cleaned_ingredients WHERE id = :recipe_id"),
+                {
+                    "cleaned_ingredients": normalize_ingredient_text(row["ingredients"]),
+                    "recipe_id": row["id"],
+                },
+            )
 
 
 def create_app(config_object=Config):
@@ -200,6 +220,17 @@ def create_app(config_object=Config):
     def auth_rate_limit_key():
         return f"{request.endpoint}:{auth_rate_limit_ip()}"
 
+    def log_security_event(event, **details):
+        app.logger.warning(
+            "security_event=%s remote_addr=%s endpoint=%s method=%s path=%s details=%s",
+            event,
+            request.remote_addr,
+            request.endpoint,
+            request.method,
+            request.path,
+            details,
+        )
+
     def auth_account_lockout_key(email):
         normalized_email = (email or "").strip().lower()
         if not normalized_email:
@@ -222,7 +253,12 @@ def create_app(config_object=Config):
 
     def is_auth_rate_limited(email=None):
         key = auth_rate_limit_key()
-        max_attempts = app.config.get("AUTH_RATE_LIMIT_MAX_ATTEMPTS", 5)
+        max_attempts = app.config.get(
+            "AUTH_REGISTER_RATE_LIMIT_MAX_ATTEMPTS"
+            if request.endpoint == "register"
+            else "AUTH_RATE_LIMIT_MAX_ATTEMPTS",
+            20 if request.endpoint == "register" else 5,
+        )
         attempt_count = auth_attempt_count(key, app.config.get("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60))
         if attempt_count >= max_attempts:
             return True
@@ -235,13 +271,24 @@ def create_app(config_object=Config):
             account_key,
             app.config.get("AUTH_ACCOUNT_LOCKOUT_WINDOW_SECONDS", 15 * 60),
         )
-        max_account_attempts = app.config.get("AUTH_ACCOUNT_LOCKOUT_MAX_ATTEMPTS", 5)
+        max_account_attempts = app.config.get(
+            "AUTH_REGISTER_ACCOUNT_LOCKOUT_MAX_ATTEMPTS"
+            if request.endpoint == "register"
+            else "AUTH_ACCOUNT_LOCKOUT_MAX_ATTEMPTS",
+            10 if request.endpoint == "register" else 5,
+        )
         return account_attempt_count >= max_account_attempts
 
     def record_attempt(key):
         db.session.add(AuthAttempt(key=key, attempted_at=time()))
 
     def record_auth_failure(email=None):
+        prune_auth_attempts(
+            window_seconds=max(
+                app.config.get("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60),
+                app.config.get("AUTH_ACCOUNT_LOCKOUT_WINDOW_SECONDS", 15 * 60),
+            )
+        )
         key = auth_rate_limit_key()
         prune_auth_attempts(key, app.config.get("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60))
         record_attempt(key)
@@ -267,6 +314,7 @@ def create_app(config_object=Config):
 
     def validate_url_surface():
         if not is_safe_input(request.path, max_length=2048):
+            log_security_event("invalid_path")
             abort(400)
 
         allowed_params = allowed_query_params_for_current_endpoint()
@@ -279,10 +327,12 @@ def create_app(config_object=Config):
                 or len(values) != 1
                 or not is_safe_input(key, max_length=64, allow_path_separators=False)
             ):
+                log_security_event("invalid_query_parameter", parameter=key)
                 abort(400)
 
             value = values[0]
             if "<" in value or ">" in value or not query_param_is_safe(key, value):
+                log_security_event("invalid_query_value", parameter=key)
                 abort(400)
 
     @app.before_request
@@ -296,11 +346,13 @@ def create_app(config_object=Config):
 
         fetch_site = request.headers.get("Sec-Fetch-Site", "").lower()
         if fetch_site == "cross-site":
+            log_security_event("cross_site_post_blocked")
             abort(403)
 
         sent_token = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
         expected_token = session.get("_csrf_token")
         if not sent_token or not expected_token or not secrets.compare_digest(sent_token, expected_token):
+            log_security_event("csrf_validation_failed")
             abort(400)
 
     @app.after_request
@@ -318,7 +370,12 @@ def create_app(config_object=Config):
             response.headers["Expires"] = "0"
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if app.config.get("SECURITY_HSTS_ENABLED"):
+            response.headers["Strict-Transport-Security"] = (
+                f"max-age={app.config.get('SECURITY_HSTS_MAX_AGE', 31536000)}; includeSubDomains"
+            )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "style-src 'self' https://cdn.jsdelivr.net; "
@@ -351,11 +408,19 @@ def create_app(config_object=Config):
         from models.user import User
 
         db.create_all()
-        ensure_recipe_measurement_schema()
+        ensure_recipe_schema()
         if app.config.get("AUTO_BOOTSTRAP_DATA", True):
             from services.data_loader import bootstrap_recipe_data
 
             bootstrap_recipe_data(app.config["DATASET_PATH"])
+
+    @app.errorhandler(SecurityError)
+    def security_error(error):
+        return (
+            "<!doctype html><title>Bad Request</title>"
+            "<h1>Bad Request</h1>"
+            "<p>The request could not be processed.</p>"
+        ), 400
 
     @app.errorhandler(400)
     def bad_request(error):
@@ -383,6 +448,24 @@ def create_app(config_object=Config):
             status_code=404,
             message="The page you requested is unavailable or may have moved.",
         ), 404
+
+    @app.errorhandler(405)
+    def method_not_allowed(error):
+        return render_template(
+            "error_view.html",
+            title="Method Not Allowed",
+            status_code=405,
+            message="This action is not available for the requested method.",
+        ), 405
+
+    @app.errorhandler(413)
+    def request_entity_too_large(error):
+        return render_template(
+            "error_view.html",
+            title="Request Too Large",
+            status_code=413,
+            message="The submitted data is too large. Please shorten your input and try again.",
+        ), 413
 
     @app.errorhandler(429)
     def too_many_requests(error):

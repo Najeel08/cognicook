@@ -128,6 +128,7 @@ def normalize_row(row):
     return {
         "title": title,
         "ingredients": ingredients,
+        "cleaned_ingredients": ingredients,
         "instructions": instructions,
         # Accept known measurement column names while keeping the current CSV schema optional.
         "ingredient_measurements": serialize_ingredient_measurements(
@@ -148,6 +149,7 @@ def recipe_fingerprint_from_row(row):
     return (
         row["title"].lower(),
         row["ingredients"],
+        row.get("cleaned_ingredients") or normalize_ingredient_text(row["ingredients"]),
         row["instructions"],
         row.get("ingredient_measurements") or "",
         row["diet_type"],
@@ -160,6 +162,7 @@ def recipe_fingerprint_from_model(recipe):
     return (
         recipe.title.lower(),
         recipe.ingredients,
+        recipe.cleaned_ingredients or normalize_ingredient_text(recipe.ingredients),
         recipe.instructions,
         recipe.ingredient_measurements or "",
         recipe.diet_type or "",
