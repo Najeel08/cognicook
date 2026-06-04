@@ -1,5 +1,6 @@
-import csv
 from pathlib import Path
+
+import pandas as pd
 
 from extensions import db
 from models.favorite import Favorite
@@ -28,9 +29,6 @@ DIET_TYPE_ALIASES = {
     "non-vegetarian": "non_veg",
     "non_veg": "non_veg",
     "nonvegetarian": "non_veg",
-    "gluten free": "gluten_free",
-    "gluten-free": "gluten_free",
-    "gluten_free": "gluten_free",
 }
 ALLOWED_DIET_TYPES.update(DIET_TYPE_ALIASES.values())
 MAX_TITLE_LENGTH = 200
@@ -176,25 +174,24 @@ def load_dataset_rows(dataset_path):
     if not path.exists():
         raise FileNotFoundError(f"Dataset not found: {path}")
 
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        if not reader.fieldnames or not REQUIRED_COLUMNS.issubset(set(reader.fieldnames)):
-            raise ValueError("Dataset is missing one or more required columns")
+    dataframe = pd.read_csv(path, encoding="utf-8-sig", dtype=str, keep_default_na=False)
+    if not REQUIRED_COLUMNS.issubset(set(dataframe.columns)):
+        raise ValueError("Dataset is missing one or more required columns")
 
-        normalized_rows = []
-        seen_keys = set()
+    normalized_rows = []
+    seen_keys = set()
 
-        for row in reader:
-            normalized = normalize_row(row)
-            if normalized is None:
-                continue
+    for row in dataframe.to_dict("records"):
+        normalized = normalize_row(row)
+        if normalized is None:
+            continue
 
-            unique_key = recipe_identity(normalized)
-            if unique_key in seen_keys:
-                continue
+        unique_key = recipe_identity(normalized)
+        if unique_key in seen_keys:
+            continue
 
-            seen_keys.add(unique_key)
-            normalized_rows.append(normalized)
+        seen_keys.add(unique_key)
+        normalized_rows.append(normalized)
 
     return normalized_rows
 

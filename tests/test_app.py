@@ -363,7 +363,7 @@ class CogniCookAppTests(unittest.TestCase):
 
             self.assertEqual(recipe.cleaned_ingredients, "ginger,garlic,yogurt,cumin seeds")
 
-    def test_data_loader_accepts_proposal_diet_labels(self):
+    def test_data_loader_accepts_supported_diet_labels(self):
         vegetarian = normalize_row(
             {
                 "title": "Vegetable Demo",
@@ -374,7 +374,22 @@ class CogniCookAppTests(unittest.TestCase):
                 "cooking_time": "20",
             }
         )
-        gluten_free = normalize_row(
+        non_vegetarian = normalize_row(
+            {
+                "title": "Chicken Demo",
+                "ingredients": "chicken,onion,salt",
+                "instructions": "Cook everything.",
+                "diet_type": "Non-Vegetarian",
+                "difficulty": "Medium",
+                "cooking_time": "25",
+            }
+        )
+
+        self.assertEqual(vegetarian["diet_type"], "veg")
+        self.assertEqual(non_vegetarian["diet_type"], "non_veg")
+
+    def test_data_loader_rejects_unsupported_gluten_free_label(self):
+        row = normalize_row(
             {
                 "title": "Gluten Free Demo",
                 "ingredients": "rice,coconut,salt",
@@ -385,8 +400,7 @@ class CogniCookAppTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(vegetarian["diet_type"], "veg")
-        self.assertEqual(gluten_free["diet_type"], "gluten_free")
+        self.assertIsNone(row)
 
     def test_auth_pages_use_contextual_greetings_without_security_hint(self):
         login_response = self.client.get("/")
@@ -479,7 +493,7 @@ class CogniCookAppTests(unittest.TestCase):
                 [
                     Recipe(
                         title="Egg Roast",
-                        ingredients="egg,onion,tomato,green chilli,ginger,garlic,curry leaves,coconut oil,chilli powder,coriander powder,turmeric powder,garam masala,salt",
+                        ingredients="egg,pepper,salt,oil",
                         instructions="Roast boiled eggs in masala.",
                         diet_type="non_veg",
                         difficulty="easy",
@@ -487,7 +501,7 @@ class CogniCookAppTests(unittest.TestCase):
                     ),
                     Recipe(
                         title="Egg Curry",
-                        ingredients="egg,onion,tomato,green chilli,ginger,garlic,curry leaves,coconut oil,coconut milk,chilli powder,coriander powder,turmeric powder,garam masala,salt,water",
+                        ingredients="egg,coconut milk,salt,water",
                         instructions="Cook eggs in curry.",
                         diet_type="non_veg",
                         difficulty="easy",
@@ -513,7 +527,7 @@ class CogniCookAppTests(unittest.TestCase):
             db.session.add(
                 Recipe(
                     title="Chicken Roast",
-                    ingredients="chicken,onion,tomato,green chilli,ginger,garlic,curry leaves,chilli powder,coriander powder,turmeric powder,garam masala,salt,oil",
+                    ingredients="chicken,onion,salt,oil",
                     instructions="Roast chicken with masala.",
                     diet_type="non_veg",
                     difficulty="medium",
@@ -532,13 +546,38 @@ class CogniCookAppTests(unittest.TestCase):
 
         self.assertIn("Chicken Roast", titles)
 
+    def test_similar_recommendations_exclude_title_matches_with_too_many_missing_ingredients(self):
+        with self.app.app_context():
+            db.session.add(
+                Recipe(
+                    title="Chicken Roast",
+                    ingredients="chicken,onion,tomato,green chilli,ginger,garlic,curry leaves,chilli powder,coriander powder,turmeric powder,garam masala,salt,oil",
+                    instructions="Roast chicken with masala.",
+                    diet_type="non_veg",
+                    difficulty="medium",
+                    cooking_time=45,
+                )
+            )
+            db.session.commit()
+
+            results = get_similar_recommendations(
+                "chicken roast",
+                {"diet": None, "difficulty": None, "sort": "relevance"},
+                page=1,
+                per_page=10,
+                max_missing=5,
+            )
+            titles = [item["recipe"].title for item in results["similar"].items]
+
+        self.assertNotIn("Chicken Roast", titles)
+
     def test_similar_recommendations_rank_complete_query_matches_above_partial_matches(self):
         with self.app.app_context():
             db.session.add_all(
                 [
                     Recipe(
                         title="Chicken Onion Tomato Masala",
-                        ingredients="chicken,onion,tomato,ginger,garlic,curry leaves,chilli powder,salt,oil",
+                        ingredients="chicken,onion,tomato,ginger,garlic,chilli powder,salt,oil",
                         instructions="Cook chicken with onion and tomato.",
                         diet_type="non_veg",
                         difficulty="medium",
@@ -631,9 +670,22 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("No exact recipes found for these ingredients.", text)
         self.assertIn("View Similar Recipes", text)
 
-    def test_similar_page_limits_results_to_one_to_three_missing_ingredients(self):
+    def test_similar_page_limits_results_to_five_missing_ingredients(self):
         self.register_user()
         self.login_user()
+
+        with self.app.app_context():
+            db.session.add(
+                Recipe(
+                    title="Five Extra Masala",
+                    ingredients="onion,tomato,ginger,garlic,curry leaves,chilli powder,coriander powder,salt,oil",
+                    instructions="Cook onion and tomato with spices.",
+                    diet_type="veg",
+                    difficulty="medium",
+                    cooking_time=30,
+                )
+            )
+            db.session.commit()
 
         response = self.client.get("/similar?ingredients=onion,tomato,potato&per_page=10")
         text = response.get_data(as_text=True)
@@ -642,6 +694,8 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Tomato Rice", text)
         self.assertIn("Dal Fry", text)
         self.assertIn("Vegetable Korma", text)
+        self.assertIn("Five Extra Masala", text)
+        self.assertIn("<strong>Missing extras:</strong> chilli powder, coriander powder, curry leaves, garlic, ginger", text)
         self.assertNotIn("No similar recipes found.", text)
 
     def test_similar_page_default_sort_is_relevance(self):

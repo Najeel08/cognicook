@@ -6,7 +6,7 @@
     <p class="eyebrow">Similar Recipe Recommendations</p>
     <h1>Recipes that need only a few extra ingredients.</h1>
     <p class="lead-copy">
-      These recommendations are limited to dishes that require one to three additional ingredients and are ranked by relevance by default.
+      These recommendations are limited to dishes that require up to five additional ingredients and are ranked by relevance by default.
     </p>
     <div class="button-row page-actions">
       <a href="{{ url_for('recommendations', ingredients=ingredients_text) }}" class="btn btn-neon-secondary">Back to Exact Matches</a>
@@ -113,7 +113,7 @@
   {% else %}
   <div class="empty-state">
     <h3>No similar recipes found.</h3>
-    <p>No matching recipes were found that require only one to three additional ingredients.</p>
+    <p>No matching recipes were found that require five or fewer additional ingredients.</p>
   </div>
   {% endif %}
 

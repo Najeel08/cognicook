@@ -295,7 +295,7 @@ def register_routes(app):
             filters,
             page=page,
             per_page=per_page,
-            max_missing=3,
+            max_missing=5,
         )
 
         recipe_ids = {item["recipe"].id for item in recommendation_data["similar"].items}

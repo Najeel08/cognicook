@@ -10,7 +10,7 @@ from utils.ingredient_cleaner import clean_ingredients, normalize_ingredient_tok
 from utils.pagination import paginate_list
 
 BASIC_INGREDIENTS = {"salt", "oil", "water", "sugar"}
-DIET_OPTIONS = ("veg", "non_veg", "gluten_free")
+DIET_OPTIONS = ("veg", "non_veg")
 DIFFICULTY_OPTIONS = ("easy", "medium", "hard")
 SIMILAR_SORT_OPTIONS = ("relevance", "title_asc", "title_desc", "time_asc", "time_desc")
 MIN_SIMILAR_MATCH_COUNT = 2
@@ -341,7 +341,7 @@ def get_strict_recommendations(ingredients_text, page, per_page):
     }
 
 
-def get_similar_recommendations(ingredients_text, filters, page, per_page, max_missing=3):
+def get_similar_recommendations(ingredients_text, filters, page, per_page, max_missing=5):
     user_ingredients, normalized_input = parse_ingredient_query(ingredients_text)
     user_ingredient_set = set(user_ingredients) - BASIC_INGREDIENTS
 
@@ -384,9 +384,8 @@ def get_similar_recommendations(ingredients_text, filters, page, per_page, max_m
         query_coverage = match_count / len(user_ingredient_set) if user_ingredient_set else 0.0
         is_primary_ingredient_match = bool(user_ingredient_set) and len(user_ingredient_set) <= 2 and query_coverage >= 1.0
         is_complete_query_match = bool(user_ingredient_set) and len(user_ingredient_set) <= 4 and query_coverage >= 1.0
-        allows_extended_missing = is_title_match or is_primary_ingredient_match or is_complete_query_match
 
-        if not 1 <= len(missing) <= max_missing and not allows_extended_missing:
+        if not 1 <= missing_count <= max_missing:
             continue
 
         is_strong_match = (
@@ -400,7 +399,7 @@ def get_similar_recommendations(ingredients_text, filters, page, per_page, max_m
         if not is_strong_match and not is_fallback_match:
             continue
 
-        missing_penalty = missing_count * (10 if allows_extended_missing else 25)
+        missing_penalty = missing_count * 25
         relevance_score = round(
             (match_count * 120)
             + (query_coverage * 100)
