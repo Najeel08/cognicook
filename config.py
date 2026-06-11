@@ -29,6 +29,7 @@ if not SECRET_KEY:
     if not SECRET_KEY:
         SECRET_KEY = secrets.token_urlsafe(48)
         try:
+            dev_secret_path.touch(mode=0o600, exist_ok=True)
             dev_secret_path.write_text(SECRET_KEY, encoding="utf-8")
         except OSError:
             pass

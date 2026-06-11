@@ -384,6 +384,7 @@ def create_app(config_object=Config):
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
         response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+        response.headers.pop("Server", None)
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         if app.config.get("SECURITY_HSTS_ENABLED"):
             response.headers["Strict-Transport-Security"] = (
@@ -401,6 +402,8 @@ def create_app(config_object=Config):
             "frame-ancestors 'none'; "
             "form-action 'self'"
         )
+        if app.config.get("SESSION_COOKIE_SECURE"):
+            response.headers["Content-Security-Policy"] += "; upgrade-insecure-requests"
         return response
 
     app.jinja_env.globals["csrf_token"] = generate_csrf_token
