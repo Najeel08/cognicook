@@ -20,7 +20,7 @@
     {% endif %}
   </div>
 
-  <form method="POST" class="ingredient-form search-panel" novalidate>
+  <form method="POST" class="ingredient-form search-panel">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label class="field-label" for="ingredients">Available ingredients</label>
     <textarea

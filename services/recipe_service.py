@@ -6,7 +6,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from models.recipe import Recipe
-from utils.ingredient_cleaner import clean_ingredients, normalize_ingredient_tokens, normalize_search_text
+from utils.ingredient_cleaner import clean_ingredients, normalize_search_text
 from utils.pagination import paginate_list
 
 BASIC_INGREDIENTS = {"salt", "oil", "water", "sugar"}
@@ -17,12 +17,13 @@ MIN_SIMILAR_MATCH_COUNT = 2
 MIN_SIMILAR_MATCH_RATIO = 0.5
 
 _similarity_cache = {
+    "vocab_built": False,
+    "index_built": False,
     "recipe_ids": (),
     "recipe_positions": {},
     "vectorizer": None,
     "matrix": None,
     "ingredient_vocabulary": frozenset(),
-    "ingredient_recipe_ids": (),
     "max_ingredient_words": 1,
 }
 
@@ -33,12 +34,13 @@ TITLE_MATCH_THRESHOLD = 0.75
 
 
 def invalidate_recipe_similarity_cache(*_args, **_kwargs):
+    _similarity_cache["vocab_built"] = False
+    _similarity_cache["index_built"] = False
     _similarity_cache["recipe_ids"] = ()
     _similarity_cache["recipe_positions"] = {}
     _similarity_cache["vectorizer"] = None
     _similarity_cache["matrix"] = None
     _similarity_cache["ingredient_vocabulary"] = frozenset()
-    _similarity_cache["ingredient_recipe_ids"] = ()
     _similarity_cache["max_ingredient_words"] = 1
 
 
@@ -59,7 +61,6 @@ def get_filter_options():
 
 def normalize_query_words(value):
     text = str(value or "").lower().replace("&", " and ")
-    text = re.sub(r"[-/]", " ", text)
     return WORD_PATTERN.findall(text)
 
 
@@ -69,16 +70,14 @@ def searchable_text(value):
 
 def exact_searchable_text(value):
     text = str(value or "").lower().replace("&", " and ")
-    text = re.sub(r"[-/]", " ", text)
     return " ".join(EXACT_TEXT_PATTERN.findall(text))
 
 
 def get_ingredient_vocabulary():
-    recipes = Recipe.query.order_by(Recipe.id.asc()).all()
-    recipe_ids = tuple(recipe.id for recipe in recipes)
-    if _similarity_cache["ingredient_recipe_ids"] == recipe_ids:
+    if _similarity_cache["vocab_built"]:
         return _similarity_cache["ingredient_vocabulary"], _similarity_cache["max_ingredient_words"]
 
+    recipes = Recipe.query.order_by(Recipe.id.asc()).all()
     vocabulary = {
         ingredient
         for recipe in recipes
@@ -88,8 +87,8 @@ def get_ingredient_vocabulary():
     max_words = max((len(ingredient.split()) for ingredient in vocabulary), default=1)
 
     _similarity_cache["ingredient_vocabulary"] = frozenset(vocabulary)
-    _similarity_cache["ingredient_recipe_ids"] = recipe_ids
     _similarity_cache["max_ingredient_words"] = max_words
+    _similarity_cache["vocab_built"] = True
     return _similarity_cache["ingredient_vocabulary"], _similarity_cache["max_ingredient_words"]
 
 
@@ -114,7 +113,7 @@ def extract_known_ingredients(text, vocabulary, max_words):
 
         for length in range(min(max_words, len(words) - index), 0, -1):
             phrase = " ".join(words[index:index + length])
-            normalized_tokens = normalize_ingredient_tokens(phrase)
+            normalized_tokens = clean_ingredients(phrase)
             if normalized_tokens and all(token in vocabulary for token in normalized_tokens):
                 matched_tokens = normalized_tokens
                 matched_length = length
@@ -192,29 +191,29 @@ def is_exact_title_match(recipe, *query_texts):
 
 
 def build_similarity_index():
-    recipes = Recipe.query.order_by(Recipe.id.asc()).all()
-    recipe_ids = tuple(recipe.id for recipe in recipes)
-    if _similarity_cache["recipe_ids"] == recipe_ids:
+    if _similarity_cache["index_built"]:
         return _similarity_cache
 
+    recipes = Recipe.query.order_by(Recipe.id.asc()).all()
     if not recipes:
-        invalidate_recipe_similarity_cache()
+        _similarity_cache["index_built"] = True
         return _similarity_cache
 
     recipe_texts = [recipe_query_text(recipe) for recipe in recipes]
     if not any(recipe_texts):
-        invalidate_recipe_similarity_cache()
-        _similarity_cache["recipe_ids"] = recipe_ids
+        _similarity_cache["index_built"] = True
+        _similarity_cache["recipe_ids"] = tuple(recipe.id for recipe in recipes)
         _similarity_cache["recipe_positions"] = {recipe.id: index for index, recipe in enumerate(recipes)}
         return _similarity_cache
 
     vectorizer = TfidfVectorizer()
     matrix = vectorizer.fit_transform(recipe_texts)
 
-    _similarity_cache["recipe_ids"] = recipe_ids
+    _similarity_cache["recipe_ids"] = tuple(recipe.id for recipe in recipes)
     _similarity_cache["recipe_positions"] = {recipe.id: index for index, recipe in enumerate(recipes)}
     _similarity_cache["vectorizer"] = vectorizer
     _similarity_cache["matrix"] = matrix
+    _similarity_cache["index_built"] = True
     return _similarity_cache
 
 

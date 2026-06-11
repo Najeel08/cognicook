@@ -78,9 +78,7 @@ PLURAL_MAP = {
     "green chilies": "green chilli",
     "green chillies": "green chilli",
     "lentils": "lentil",
-    "beans": "beans",
     "carrots": "carrot",
-    "peas": "peas",
     "cashews": "cashew nuts",
     "cashew": "cashew nuts",
     "peanuts": "peanuts",
@@ -91,10 +89,8 @@ PLURAL_MAP = {
     "coriander leaf": "coriander leaves",
     "drumsticks": "drumstick",
     "prawns": "prawns",
-    "vegetables": "vegetables",
     "chickpeas": "chickpeas",
     "kidney beans": "kidney beans",
-    "seeds": "seeds",
     "mustards": "mustard seeds",
     "coconuts": "coconut",
     "lemons": "lemon",
@@ -106,7 +102,6 @@ INGREDIENT_ALIASES = {
     "chili": "green chilli",
     "chilli": "green chilli",
     "green chili": "green chilli",
-    "green green chilli": "green chilli",
     "green chilies": "green chilli",
     "green chillies": "green chilli",
     "red chili": "dry red chilli",
@@ -128,8 +123,6 @@ INGREDIENT_ALIASES = {
 COMPOUND_INGREDIENTS = {
     "ginger garlic paste": ("ginger", "garlic"),
     "ginger garlic": ("ginger", "garlic"),
-    "ginger-garlic paste": ("ginger", "garlic"),
-    "ginger-garlic": ("ginger", "garlic"),
 }
 
 PROTECTED_INGREDIENTS = {
@@ -191,8 +184,4 @@ def normalize_ingredient_tokens(value):
 
 
 def normalize_ingredient_text(value):
-    return ",".join(normalize_ingredient_tokens(value))
-
-
-def clean_ingredients(user_input):
-    return normalize_ingredient_tokens(user_input)
+    return ",".join(clean_ingredients(value))

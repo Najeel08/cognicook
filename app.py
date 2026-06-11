@@ -1,7 +1,7 @@
 import os
 import secrets
 import sqlite3
-from hashlib import sha256
+from hmac import new as hmac_new
 from pathlib import Path
 from time import time
 from urllib.parse import urlencode
@@ -18,7 +18,7 @@ from models.auth_attempt import AuthAttempt
 from utils.ingredient_cleaner import normalize_ingredient_text
 from utils.validators import is_safe_input
 
-SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 ALLOWED_QUERY_PARAMS_BY_ENDPOINT = {
     "login": set(),
     "register": set(),
@@ -47,7 +47,7 @@ def configure_sqlite_connection(dbapi_connection, connection_record):
     if isinstance(dbapi_connection, sqlite3.Connection):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.execute("PRAGMA journal_mode=MEMORY")
+        cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.close()
 
@@ -74,7 +74,7 @@ def recover_sqlite_file(source_path, recovered_path):
         dump_sql = "\n".join(source.iterdump())
 
     with sqlite3.connect(recovered_path.as_posix(), isolation_level=None) as target:
-        target.execute("PRAGMA journal_mode=MEMORY")
+        target.execute("PRAGMA journal_mode=WAL")
         target.execute("PRAGMA synchronous=NORMAL")
         target.executescript(dump_sql)
 
@@ -107,7 +107,11 @@ def prepare_database_file(app):
         if not recovered_path.exists():
             try:
                 recover_sqlite_file(database_path, recovered_path)
-            except (RuntimeError, sqlite3.Error):
+            except (RuntimeError, sqlite3.Error) as e:
+                app.logger.error(
+                    "Database recovery failed for %s: %s. Using empty database.",
+                    database_path, e
+                )
                 recovered_path = choose_recovered_database_path(database_path)
 
         app.config["DATABASE_FILE"] = recovered_path.as_posix()
@@ -153,6 +157,14 @@ def create_app(config_object=Config):
 
     if app.config.get("REQUIRE_SECRET_KEY_FROM_ENV") and not app.config.get("SECRET_KEY_FROM_ENV"):
         raise RuntimeError("SECRET_KEY must be provided via the environment in production.")
+    if app.config.get("IS_PRODUCTION"):
+        if len(str(app.config.get("SECRET_KEY") or "")) < 32:
+            raise RuntimeError("SECRET_KEY must be at least 32 characters in production.")
+        if not app.config.get("SESSION_COOKIE_SECURE"):
+            raise RuntimeError("SESSION_COOKIE_SECURE must be enabled in production.")
+        trusted_hosts = app.config.get("TRUSTED_HOSTS") or []
+        if not trusted_hosts or "*" in trusted_hosts:
+            raise RuntimeError("COGNICOOK_TRUSTED_HOSTS must contain explicit production hostnames.")
 
     prepare_database_file(app)
 
@@ -235,7 +247,8 @@ def create_app(config_object=Config):
         normalized_email = (email or "").strip().lower()
         if not normalized_email:
             return None
-        digest = sha256(normalized_email.encode("utf-8")).hexdigest()
+        secret_key = str(app.config["SECRET_KEY"]).encode("utf-8")
+        digest = hmac_new(secret_key, normalized_email.encode("utf-8"), "sha256").hexdigest()
         return f"{request.endpoint}:account:{digest}"
 
     def prune_auth_attempts(key=None, window_seconds=None):
@@ -480,6 +493,13 @@ def create_app(config_object=Config):
     @app.errorhandler(SQLAlchemyError)
     def database_error(error):
         db.session.rollback()
+        app.logger.error(
+            "database_error endpoint=%s method=%s path=%s error_type=%s",
+            request.endpoint,
+            request.method,
+            request.path,
+            type(error).__name__,
+        )
         return render_template(
             "error_view.html",
             title="Service Unavailable",
@@ -489,6 +509,13 @@ def create_app(config_object=Config):
 
     @app.errorhandler(500)
     def server_error(error):
+        app.logger.error(
+            "server_error endpoint=%s method=%s path=%s error_type=%s",
+            request.endpoint,
+            request.method,
+            request.path,
+            type(error).__name__,
+        )
         return render_template(
             "error_view.html",
             title="Server Error",

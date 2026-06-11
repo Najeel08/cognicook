@@ -24,6 +24,7 @@ CogniCook is a Flask-based intelligent recipe recommendation system. It recommen
 - `scripts/` - dataset cleaning/import helpers
 - `tests/` - regression and integration tests
 - `proposal_pages/` - proposal reference pages used as requirements
+- `SECURITY_AUDIT.md` - security findings, threat model, framework alignment, and deployment checklist
 
 ## Setup
 
@@ -56,6 +57,8 @@ Clean or import recipe data:
 
 ## Production Notes
 
-- Set `SECRET_KEY` in the environment for production.
-- Keep `COGNICOOK_ENV=production` for secure-cookie defaults.
+- Start from `.env.example` and store real secrets in protected deployment variables.
+- Set `COGNICOOK_ENV=production`, a strong `SECRET_KEY`, and explicit `COGNICOOK_TRUSTED_HOSTS`.
+- Production refuses insecure cookies, weak secrets, and missing/wildcard trusted-host settings.
+- Recipe auto-bootstrap is disabled by default in production; use the import script for controlled updates.
 - Do not commit `instance/`, SQLite databases, generated artifacts, virtual environments, or Python cache files.

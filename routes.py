@@ -1,9 +1,11 @@
+import secrets
 from urllib.parse import urlsplit
 from time import time
 
 from flask import abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy.exc import IntegrityError
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from extensions import db
 from models.favorite import Favorite
@@ -31,6 +33,7 @@ from utils.validators import (
 
 MAX_INGREDIENT_INPUT_LENGTH = 1000
 MAX_PASSWORD_INPUT_LENGTH = 256
+DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
 
 
 def current_similar_filters():
@@ -128,7 +131,12 @@ def register_routes(app):
                 return render_template("login_v2.html", title="Login")
 
             user = User.query.filter_by(email=email).first()
-            if user and user.check_password(password):
+            password_matches = (
+                user.check_password(password)
+                if user
+                else check_password_hash(DUMMY_PASSWORD_HASH, password)
+            )
+            if user and password_matches:
                 security_tools["clear_auth_failures"](email)
                 session.clear()
                 login_user(user)
@@ -168,8 +176,7 @@ def register_routes(app):
 
             if not is_valid_email(email):
                 errors.append("Please enter a valid email address.")
-
-            if not is_safe_input(email, max_length=254, allow_path_separators=False):
+            elif not is_safe_input(email, max_length=254, allow_path_separators=False):
                 errors.append("Please enter a valid email address.")
 
             errors.extend(validate_password(password))
@@ -181,7 +188,9 @@ def register_routes(app):
                 errors.append("Password confirmation does not match.")
 
             if User.query.filter_by(email=email).first():
-                errors.append("Email already registered. Please use a different email address.")
+                errors.append(
+                    "Registration could not be completed. Use a different email address or sign in if you already have an account."
+                )
 
             if errors:
                 security_tools["record_auth_failure"](email)
@@ -197,7 +206,10 @@ def register_routes(app):
             except IntegrityError:
                 db.session.rollback()
                 security_tools["record_auth_failure"](email)
-                flash("Email already registered. Please use a different email address.", "danger")
+                flash(
+                    "Registration could not be completed. Use a different email address or sign in if you already have an account.",
+                    "danger",
+                )
                 return redirect(url_for("register"))
 
             security_tools["clear_auth_failures"](email)
@@ -211,7 +223,7 @@ def register_routes(app):
         if request.method == "POST":
             ingredients_input = get_validated_ingredients(request.form)
             if ingredients_input is None:
-                flash("Ingredient list is too long.", "warning")
+                flash("Invalid input: ingredients list must be under 1000 characters and cannot contain '<' or '>'.", "warning")
                 return redirect(url_for("dashboard"))
 
             cleaned_ingredients = clean_ingredients(ingredients_input)
@@ -225,26 +237,11 @@ def register_routes(app):
 
     @app.route("/recommendations", methods=["GET"])
     def recommendations():
-        ingredients_input = get_validated_ingredients(request.args)
+        ingredients_input, normalized_ingredients = validate_search_request(request.args)
         if ingredients_input is None:
-            flash("Ingredient list is too long.", "warning")
             return redirect(url_for("dashboard"))
 
-        if not ingredients_input:
-            flash("Enter at least one ingredient to see recommendations.", "warning")
-            return redirect(url_for("dashboard"))
-
-        normalized_ingredients = clean_ingredients(ingredients_input)
-        if not normalized_ingredients:
-            flash("Please enter at least one valid ingredient to get suggestions.", "warning")
-            return redirect(url_for("dashboard"))
-
-        page = get_positive_int(request.args.get("page"), default=1, maximum=999)
-        per_page = get_positive_int(
-            request.args.get("per_page"),
-            default=current_app.config["RESULTS_PER_PAGE"],
-            maximum=current_app.config["MAX_PER_PAGE"],
-        )
+        page, per_page = get_pagination_args()
 
         recommendation_data = get_strict_recommendations(ingredients_input, page=page, per_page=per_page)
         record_search_activity(
@@ -268,27 +265,12 @@ def register_routes(app):
 
     @app.route("/similar", methods=["GET"])
     def similar_recipes_page():
-        ingredients_input = get_validated_ingredients(request.args)
+        ingredients_input, normalized_ingredients = validate_search_request(request.args)
         if ingredients_input is None:
-            flash("Ingredient list is too long.", "warning")
-            return redirect(url_for("dashboard"))
-
-        if not ingredients_input:
-            flash("Enter at least one ingredient to see recommendations.", "warning")
-            return redirect(url_for("dashboard"))
-
-        normalized_ingredients = clean_ingredients(ingredients_input)
-        if not normalized_ingredients:
-            flash("Please enter at least one valid ingredient to get suggestions.", "warning")
             return redirect(url_for("dashboard"))
 
         filters = current_similar_filters()
-        page = get_positive_int(request.args.get("page"), default=1, maximum=999)
-        per_page = get_positive_int(
-            request.args.get("per_page"),
-            default=current_app.config["RESULTS_PER_PAGE"],
-            maximum=current_app.config["MAX_PER_PAGE"],
-        )
+        page, per_page = get_pagination_args()
 
         recommendation_data = get_similar_recommendations(
             ingredients_input,
@@ -316,12 +298,7 @@ def register_routes(app):
     @app.route("/favorites", methods=["GET"])
     @login_required
     def favorites():
-        page = get_positive_int(request.args.get("page"), default=1, maximum=999)
-        per_page = get_positive_int(
-            request.args.get("per_page"),
-            default=current_app.config["RESULTS_PER_PAGE"],
-            maximum=current_app.config["MAX_PER_PAGE"],
-        )
+        page, per_page = get_pagination_args()
 
         favorite_recipes = (
             Recipe.query.join(Favorite, Favorite.recipe_id == Recipe.id)
@@ -341,12 +318,7 @@ def register_routes(app):
     @app.route("/activity", methods=["GET"])
     @login_required
     def activity_summary():
-        page = get_positive_int(request.args.get("page"), default=1, maximum=999)
-        per_page = get_positive_int(
-            request.args.get("per_page"),
-            default=current_app.config["RESULTS_PER_PAGE"],
-            maximum=current_app.config["MAX_PER_PAGE"],
-        )
+        page, per_page = get_pagination_args()
 
         favorite_count = Favorite.query.filter_by(user_id=current_user.id).count()
         activities = (

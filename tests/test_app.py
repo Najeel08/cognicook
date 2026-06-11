@@ -189,7 +189,7 @@ class CogniCookAppTests(unittest.TestCase):
 
         self.register_user()
         response = self.register_user(username="second_user")
-        self.assertIn("Email already registered. Please use a different email address.", response.get_data(as_text=True))
+        self.assertIn("Registration could not be completed.", response.get_data(as_text=True))
 
     def test_register_rejects_overlong_username_without_truncating(self):
         response = self.register_user(username="a" * 31)
@@ -1289,6 +1289,48 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.client.get("/", follow_redirects=False)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers.get("Location"), "/dashboard")
+
+    def test_production_configuration_fails_closed(self):
+        class ProductionConfig:
+            TESTING = True
+            IS_PRODUCTION = True
+            SECRET_KEY = "x" * 48
+            SECRET_KEY_FROM_ENV = True
+            REQUIRE_SECRET_KEY_FROM_ENV = True
+            SESSION_COOKIE_SECURE = True
+            TRUSTED_HOSTS = ["cognicook.example"]
+            SQLALCHEMY_DATABASE_URI = "sqlite://"
+            SQLALCHEMY_TRACK_MODIFICATIONS = False
+            SQLALCHEMY_ENGINE_OPTIONS = {
+                "connect_args": {"check_same_thread": False},
+                "poolclass": StaticPool,
+            }
+            AUTO_BOOTSTRAP_DATA = False
+
+        class WeakSecretConfig(ProductionConfig):
+            SECRET_KEY = "short"
+
+        class InsecureCookieConfig(ProductionConfig):
+            SESSION_COOKIE_SECURE = False
+
+        class MissingHostsConfig(ProductionConfig):
+            TRUSTED_HOSTS = None
+
+        class WildcardHostsConfig(ProductionConfig):
+            TRUSTED_HOSTS = ["*"]
+
+        with self.assertRaisesRegex(RuntimeError, "at least 32 characters"):
+            create_app(WeakSecretConfig)
+        with self.assertRaisesRegex(RuntimeError, "SESSION_COOKIE_SECURE"):
+            create_app(InsecureCookieConfig)
+        with self.assertRaisesRegex(RuntimeError, "explicit production hostnames"):
+            create_app(MissingHostsConfig)
+        with self.assertRaisesRegex(RuntimeError, "explicit production hostnames"):
+            create_app(WildcardHostsConfig)
+
+        production_app = create_app(ProductionConfig)
+        response = production_app.test_client().get("/", headers={"Host": "cognicook.example"})
+        self.assertEqual(response.status_code, 200)
 
 
 if __name__ == "__main__":

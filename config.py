@@ -8,7 +8,9 @@ INSTANCE_PATH = Path(os.environ.get("COGNICOOK_DATA_DIR") or (BASE_DIR / "instan
 DATABASE_PATH = Path(os.environ.get("COGNICOOK_DB_PATH") or (INSTANCE_PATH / "cognicook.db"))
 DATASET_PATH = Path(os.environ.get("COGNICOOK_DATASET_PATH") or (BASE_DIR / "dataset" / "recipes.csv"))
 APP_ENV = os.environ.get("COGNICOOK_ENV", os.environ.get("FLASK_ENV", "development")).strip().lower()
+IS_PRODUCTION = APP_ENV == "production"
 DEFAULT_SECURE_COOKIE = "1" if APP_ENV == "production" else "0"
+DEFAULT_AUTO_BOOTSTRAP_DATA = "0" if IS_PRODUCTION else "1"
 TRUSTED_HOSTS = [
     value.strip()
     for value in os.environ.get("COGNICOOK_TRUSTED_HOSTS", "").split(",")
@@ -33,9 +35,10 @@ if not SECRET_KEY:
 
 
 class Config:
+    IS_PRODUCTION = IS_PRODUCTION
     SECRET_KEY = SECRET_KEY
     SECRET_KEY_FROM_ENV = SECRET_KEY_FROM_ENV
-    REQUIRE_SECRET_KEY_FROM_ENV = APP_ENV == "production"
+    REQUIRE_SECRET_KEY_FROM_ENV = IS_PRODUCTION
     DATABASE_FILE = DATABASE_PATH.as_posix()
     SQLALCHEMY_DATABASE_URI = f"sqlite:///{DATABASE_PATH.as_posix()}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -52,7 +55,7 @@ class Config:
     SECURITY_HSTS_MAX_AGE = int(os.environ.get("SECURITY_HSTS_MAX_AGE", "31536000"))
     TRUSTED_HOSTS = TRUSTED_HOSTS or None
     DATASET_PATH = DATASET_PATH.as_posix()
-    AUTO_BOOTSTRAP_DATA = os.environ.get("AUTO_BOOTSTRAP_DATA", "1") == "1"
+    AUTO_BOOTSTRAP_DATA = os.environ.get("AUTO_BOOTSTRAP_DATA", DEFAULT_AUTO_BOOTSTRAP_DATA) == "1"
     RESULTS_PER_PAGE = 12
     MAX_PER_PAGE = 24
     AUTH_RATE_LIMIT_WINDOW_SECONDS = 60
