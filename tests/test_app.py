@@ -407,6 +407,7 @@ class CogniCookAppTests(unittest.TestCase):
         login_text = login_response.get_data(as_text=True)
         self.assertIn("Welcome", login_text)
         self.assertIn('href="/register"', login_text)
+        self.assertIn('class="brandmark" href="/dashboard"', login_text)
         self.assertNotIn("Welcome Back", login_text)
         self.assertNotIn("Repeated failed logins are rate limited automatically", login_text)
 
@@ -1198,6 +1199,22 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Simple Curry", text)
         self.assertIn("Log in to Save", text)
 
+    def test_recipe_detail_back_link_uses_safe_return_target(self):
+        response = self.client.get(
+            "/recipe/1?next=%2Frecommendations%3Fingredients%3Donion%2Ctomato%2Cpotato%26page%3D2",
+            follow_redirects=False,
+        )
+        text = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/recommendations?ingredients=onion,tomato,potato&amp;page=2"', text)
+
+        response = self.client.get("/recipe/1?next=https%3A%2F%2Fevil.example%2Fhijack", follow_redirects=False)
+        text = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/dashboard"', text)
+        self.assertNotIn("evil.example", text)
+
     def test_tampered_user_session_does_not_raise_server_error(self):
         with self.client.session_transaction() as session:
             session["_user_id"] = "not-an-integer"
@@ -1225,6 +1242,15 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Add onion and tomato.", text)
         self.assertIn("Step 3", text)
         self.assertIn("Serve hot.", text)
+
+    def test_instruction_parser_keeps_to_remove_phrase_together(self):
+        self.assertEqual(
+            split_instruction_block("Soak in 4 cup water for 15 minutes to remove excess starch and drain completely."),
+            [
+                "Soak in 4 cup water for 15 minutes to remove excess starch.",
+                "Drain completely.",
+            ],
+        )
 
     def test_recipe_detail_hides_retired_metadata_and_shows_measurement_fallback(self):
         self.register_user()

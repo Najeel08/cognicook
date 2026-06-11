@@ -2,7 +2,7 @@ import json
 import re
 from dataclasses import dataclass
 
-from utils.ingredient_cleaner import normalize_ingredient_tokens, normalize_search_text
+from utils.ingredient_cleaner import clean_ingredients, normalize_search_text
 
 
 @dataclass(frozen=True)
@@ -35,7 +35,7 @@ def _clean_text(value):
 
 
 def _clean_ingredient(value):
-    normalized_tokens = normalize_ingredient_tokens(value)
+    normalized_tokens = clean_ingredients(value)
     if normalized_tokens:
         return normalized_tokens[0]
     return normalize_search_text(value).lower()

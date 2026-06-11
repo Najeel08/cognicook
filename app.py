@@ -29,7 +29,7 @@ ALLOWED_QUERY_PARAMS_BY_ENDPOINT = {
     "activity_summary": {"page", "per_page"},
     "favorite": set(),
     "remove_favorite": set(),
-    "recipe_detail": set(),
+    "recipe_detail": {"next"},
     "logout": set(),
 }
 QUERY_PARAM_MAX_LENGTHS = {
@@ -39,6 +39,7 @@ QUERY_PARAM_MAX_LENGTHS = {
     "diet": 20,
     "difficulty": 20,
     "sort": 30,
+    "next": 1200,
 }
 
 

@@ -12,7 +12,7 @@ SEQUENCE_MARKER_PATTERN = re.compile(
     re.IGNORECASE,
 )
 ACTION_BOUNDARY_PATTERN = re.compile(
-    r"\s+(?=(?:wash|rinse|soak|drain|heat\s+(?:oil|coconut|mustard|water|milk|ghee)|add|put|place|cook|simmer|stir|mix|grind|pour|steam\s+for|cover|remove|serve|turn off|allow|beat|whisk|saute|fry|garnish)\b)",
+    r"(?<!\bto)\s+(?=(?:wash|rinse|soak|drain|heat\s+(?:oil|coconut|mustard|water|milk|ghee)|add|put|place|cook|simmer|stir|mix|grind|pour|steam\s+for|cover|remove|serve|turn off|allow|beat|whisk|saute|fry|garnish)\b)",
     re.IGNORECASE,
 )
 TRAILING_CONNECTOR_PATTERN = re.compile(r"\s+(?:and|then)\s*$", re.IGNORECASE)

@@ -1,7 +1,7 @@
 from sqlalchemy import event
 
 from extensions import db
-from utils.ingredient_cleaner import normalize_ingredient_text, normalize_ingredient_tokens
+from utils.ingredient_cleaner import normalize_ingredient_text, clean_ingredients
 from utils.ingredient_measurements import parse_ingredient_measurements
 from utils.instructions import split_instruction_block
 
@@ -24,7 +24,7 @@ class Recipe(db.Model):
     ingredient_measurements = db.Column(db.Text)
 
     def ingredient_list(self):
-        return normalize_ingredient_tokens(self.cleaned_ingredients or self.ingredients)
+        return clean_ingredients(self.cleaned_ingredients or self.ingredients)
 
     def instruction_steps(self):
         return split_instruction_block(self.instructions)

@@ -92,7 +92,7 @@
       <div class="recipe-card-footer">
         <span>{{ item.recipe.cooking_time or 0 }} min</span>
         <div class="button-row">
-          <a href="{{ url_for('recipe_detail', recipe_id=item.recipe.id) }}" class="btn btn-neon-secondary btn-sm">View</a>
+          <a href="{{ url_for('recipe_detail', recipe_id=item.recipe.id, next=request.full_path) }}" class="btn btn-neon-secondary btn-sm">View</a>
           {% if current_user.is_authenticated %}
           <form method="POST" action="{{ url_for('favorite', recipe_id=item.recipe.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />

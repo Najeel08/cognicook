@@ -152,7 +152,7 @@ def normalize_search_text(value):
     return " ".join(str(value or "").split()).strip()
 
 
-def normalize_ingredient_tokens(value):
+def clean_ingredients(value):
     if not value:
         return []
 
@@ -181,6 +181,10 @@ def normalize_ingredient_tokens(value):
         ingredients.append(INGREDIENT_ALIASES.get(ingredient, ingredient))
 
     return list(dict.fromkeys(ingredients))
+
+
+def normalize_ingredient_tokens(value):
+    return clean_ingredients(value)
 
 
 def normalize_ingredient_text(value):

@@ -34,6 +34,9 @@ from utils.validators import (
 MAX_INGREDIENT_INPUT_LENGTH = 1000
 MAX_PASSWORD_INPUT_LENGTH = 256
 DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
+INVALID_INGREDIENT_INPUT_MESSAGE = (
+    "Invalid input: ingredients list must be under 1000 characters and cannot contain '<' or '>'."
+)
 
 
 def current_similar_filters():
@@ -64,6 +67,23 @@ def get_safe_redirect_target(default_endpoint, **values):
             return target
 
     return url_for(default_endpoint, **values)
+
+
+def get_safe_return_path(value):
+    if not value:
+        return ""
+
+    parsed = urlsplit(value)
+    path_is_local = parsed.path.startswith("/") and not parsed.path.startswith("//")
+    path_is_safe = is_safe_input(parsed.path, max_length=2048)
+    query_is_safe = is_safe_input(parsed.query, max_length=1200) and "<" not in parsed.query and ">" not in parsed.query
+    if parsed.scheme or parsed.netloc or not path_is_local or not path_is_safe or not query_is_safe:
+        return ""
+
+    target = parsed.path
+    if parsed.query:
+        target = f"{target}?{parsed.query}"
+    return target
 
 
 def get_favorite_recipe_ids(recipe_ids):
@@ -104,6 +124,34 @@ def get_validated_ingredients(source):
     if not is_safe_input(ingredients_input, max_length=MAX_INGREDIENT_INPUT_LENGTH) or "<" in ingredients_input or ">" in ingredients_input:
         return None
     return ingredients_input
+
+
+def validate_search_request(source):
+    ingredients_input = get_validated_ingredients(source)
+    if ingredients_input is None:
+        flash(INVALID_INGREDIENT_INPUT_MESSAGE, "warning")
+        return None, []
+
+    if not ingredients_input:
+        flash("Enter at least one ingredient to see recommendations.", "warning")
+        return None, []
+
+    normalized_ingredients = clean_ingredients(ingredients_input)
+    if not normalized_ingredients:
+        flash("Please enter at least one valid ingredient to get suggestions.", "warning")
+        return None, []
+
+    return ingredients_input, normalized_ingredients
+
+
+def get_pagination_args():
+    page = get_positive_int(request.args.get("page"), default=1, maximum=999)
+    per_page = get_positive_int(
+        request.args.get("per_page"),
+        default=current_app.config["RESULTS_PER_PAGE"],
+        maximum=current_app.config["MAX_PER_PAGE"],
+    )
+    return page, per_page
 
 
 def register_routes(app):
@@ -223,7 +271,7 @@ def register_routes(app):
         if request.method == "POST":
             ingredients_input = get_validated_ingredients(request.form)
             if ingredients_input is None:
-                flash("Invalid input: ingredients list must be under 1000 characters and cannot contain '<' or '>'.", "warning")
+                flash(INVALID_INGREDIENT_INPUT_MESSAGE, "warning")
                 return redirect(url_for("dashboard"))
 
             cleaned_ingredients = clean_ingredients(ingredients_input)
@@ -385,7 +433,7 @@ def register_routes(app):
             title=recipe.title,
             recipe=recipe,
             is_favorite=is_favorite,
-            back_url=get_safe_redirect_target("dashboard"),
+            back_url=get_safe_return_path(request.args.get("next")) or get_safe_redirect_target("dashboard"),
         )
 
     @app.route("/logout", methods=["POST"])
