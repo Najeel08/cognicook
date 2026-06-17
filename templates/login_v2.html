@@ -2,40 +2,93 @@
 {% block content %}
 
 <section class="auth-wrap">
+
   <div class="auth-copy glass-panel">
-    <p class="eyebrow">Smart Indian Recipe Discovery</p>
-    <h1>Cook confidently with the ingredients you already have.</h1>
+
+    <p class="eyebrow">SMART INDIAN RECIPE DISCOVERY</p>
+
+    <h1>
+      Cook confidently with ingredients you already have.
+    </h1>
+
     <p class="lead-copy">
-      Sign in to search by ingredients, view exact recipe matches, explore similar dishes, and save favorites in one place.
+      Sign in to search by ingredients, discover exact recipe matches,
+      explore similar dishes, and save your favorites in one place.
     </p>
+
     <div class="feature-pills">
-      <span>Ingredient matching</span>
-      <span>Similarity ranking</span>
-      <span>Saved recipes</span>
+      <span>Ingredient Matching</span>
+      <span>Similarity Ranking</span>
+      <span>Saved Recipes</span>
     </div>
+
   </div>
 
   <div class="auth-card glass-panel">
-    <p class="eyebrow">Welcome</p>
+
+    <p class="eyebrow">WELCOME BACK</p>
+
     <h2>Login</h2>
 
-    <form method="POST" action="{{ url_for('login') }}" class="auth-form">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <p class="lead-copy">
+      Access your saved recipes and personalized recommendations.
+    </p>
 
-      <label class="field-label" for="email">Email address</label>
-      <input id="email" type="email" name="email" class="form-control" placeholder="you@example.com" autocomplete="email" maxlength="254" required />
+    <form method="POST"
+          action="{{ url_for('login') }}"
+          class="auth-form">
 
-      <label class="field-label" for="password">Password</label>
-      <input id="password" type="password" name="password" class="form-control" placeholder="Enter your password" autocomplete="current-password" maxlength="256" required />
+      <input type="hidden"
+             name="csrf_token"
+             value="{{ csrf_token() }}" />
 
-      <button type="submit" class="btn btn-neon-primary w-100 mt-3">Login</button>
+      <label class="field-label" for="email">
+        Email address
+      </label>
+
+      <input
+        id="email"
+        type="email"
+        name="email"
+        class="form-control"
+        placeholder="you@example.com"
+        autocomplete="email"
+        maxlength="254"
+        required
+      />
+
+      <label class="field-label" for="password">
+        Password
+      </label>
+
+      <input
+        id="password"
+        type="password"
+        name="password"
+        class="form-control"
+        placeholder="Enter your password"
+        autocomplete="current-password"
+        maxlength="256"
+        required
+      />
+
+      <button
+        type="submit"
+        class="btn btn-neon-primary w-100 mt-3">
+        Login
+      </button>
+
     </form>
 
     <p class="auth-switch">
       New to CogniCook?
-      <a href="{{ url_for('register') }}">Create an account</a>
+      <a href="{{ url_for('register') }}">
+        Create an account
+      </a>
     </p>
+
   </div>
+
 </section>
 
 {% endblock %}

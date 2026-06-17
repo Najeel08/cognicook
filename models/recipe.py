@@ -24,7 +24,15 @@ class Recipe(db.Model):
     ingredient_measurements = db.Column(db.Text)
 
     def ingredient_list(self):
-        return clean_ingredients(self.cleaned_ingredients or self.ingredients)
+        if self.cleaned_ingredients:
+            ingredients = [
+                ingredient.strip().lower()
+                for ingredient in self.cleaned_ingredients.split(",")
+                if ingredient.strip()
+            ]
+            return list(dict.fromkeys(ingredients))
+
+        return clean_ingredients(self.ingredients)
 
     def instruction_steps(self):
         return split_instruction_block(self.instructions)

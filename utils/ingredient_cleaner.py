@@ -158,7 +158,8 @@ def clean_ingredients(value):
 
     text = str(value).lower()
     text = text.replace("&", " and ")
-    text = re.sub(r"[-/]", " ", text)
+    text = re.sub(r"\s*/\s*", ",", text)
+    text = re.sub(r"-", " ", text)
     text = PROTECTED_INGREDIENTS_PATTERN.sub(lambda match: PROTECTED_INGREDIENTS[match.group(0)], text)
     text = PLURAL_PATTERN.sub(lambda match: PLURAL_MAP[match.group(0)], text)
     text = REMOVE_WORDS_PATTERN.sub("", text)

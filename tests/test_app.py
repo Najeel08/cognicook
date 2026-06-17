@@ -293,6 +293,14 @@ class CogniCookAppTests(unittest.TestCase):
             clean_ingredients("2 cups green gram, 250 grams tomatoes"),
             ["green gram", "tomato"],
         )
+        self.assertEqual(
+            clean_ingredients("onion/tomato/potato"),
+            ["onion", "tomato", "potato"],
+        )
+        self.assertEqual(
+            clean_ingredients("ginger-garlic paste"),
+            ["ginger", "garlic"],
+        )
 
     def test_instruction_parser_preserves_single_action_phrases(self):
         self.assertEqual(
@@ -362,6 +370,13 @@ class CogniCookAppTests(unittest.TestCase):
             db.session.commit()
 
             self.assertEqual(recipe.cleaned_ingredients, "ginger,garlic,yogurt,cumin seeds")
+            self.assertEqual(recipe.ingredient_list(), ["ginger", "garlic", "yogurt", "cumin seeds"])
+
+            recipe.ingredients = "cashew, cream"
+            db.session.commit()
+
+            self.assertEqual(recipe.cleaned_ingredients, "cashew nuts,cream")
+            self.assertEqual(recipe.ingredient_list(), ["cashew nuts", "cream"])
 
     def test_data_loader_accepts_supported_diet_labels(self):
         vegetarian = normalize_row(
@@ -608,6 +623,19 @@ class CogniCookAppTests(unittest.TestCase):
 
         self.assertLess(titles.index("Chicken Onion Tomato Masala"), titles.index("Onion Tomato Masala"))
 
+    def test_similar_relevance_percent_follows_default_ranking(self):
+        with self.app.app_context():
+            results = get_similar_recommendations(
+                "onion tomato potato",
+                {"diet": None, "difficulty": None, "sort": "relevance"},
+                page=1,
+                per_page=10,
+            )
+            percents = [item["relevance_percent"] for item in results["similar"].items]
+
+        self.assertGreaterEqual(len(percents), 2)
+        self.assertEqual(percents, sorted(percents, reverse=True))
+
     def test_recipe_discovery_is_available_before_login_but_save_requires_login(self):
         response = self.client.get("/recommendations?ingredients=onion,tomato,potato")
         text = response.get_data(as_text=True)
@@ -662,6 +690,16 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.client.get("/recommendations?ingredients=rice,onion,beans")
         text = response.get_data(as_text=True)
         self.assertIn("Rice Kanji", text)
+
+    def test_strict_matching_accepts_slash_separated_ingredients(self):
+        response = self.client.get("/recommendations?ingredients=onion/tomato/potato")
+        text = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Simple Curry", text)
+        self.assertIn("onion", text)
+        self.assertIn("tomato", text)
+        self.assertIn("potato", text)
 
     def test_recommendations_page_shows_empty_state_when_no_strict_match_exists(self):
         self.register_user()

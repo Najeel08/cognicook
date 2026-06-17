@@ -2,54 +2,144 @@
 {% block content %}
 
 <section class="auth-wrap">
+
   <div class="auth-copy glass-panel">
-    <p class="eyebrow">Create Account</p>
-    <h1>Create your CogniCook account and start finding recipes instantly.</h1>
+
+    <p class="eyebrow">CREATE ACCOUNT</p>
+
+    <h1>
+      Create your CogniCook account.
+    </h1>
+
     <p class="lead-copy">
-      Build a simple recipe workspace with exact matches, similar suggestions, saved dishes, and secure login.
+      Build your recipe workspace with exact matches,
+      smart suggestions, favorites, and secure access
+      from any device.
     </p>
+
     <div class="feature-pills">
-      <span>Secure login</span>
-      <span>Clear recipe flow</span>
-      <span>Responsive design</span>
+      <span>Secure Login</span>
+      <span>Recipe Discovery</span>
+      <span>Saved Favorites</span>
     </div>
+
   </div>
 
   <div class="auth-card glass-panel">
-    <p class="eyebrow">Create your account</p>
+
+    <p class="eyebrow">CREATE YOUR ACCOUNT</p>
+
     <h2>Register</h2>
 
-    <form method="POST" action="{{ url_for('register') }}" class="auth-form" id="register-form" novalidate>
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+    <p class="lead-copy">
+      Set up your account and start discovering recipes immediately.
+    </p>
 
-      <label class="field-label" for="username">Username</label>
-      <input id="username" type="text" name="username" class="form-control" placeholder="Choose a username" autocomplete="username" minlength="3" maxlength="30" required />
+    <form
+      method="POST"
+      action="{{ url_for('register') }}"
+      class="auth-form"
+      id="register-form"
+      novalidate>
 
-      <label class="field-label" for="email">Email address</label>
-      <input id="email" type="email" name="email" class="form-control" placeholder="you@example.com" autocomplete="email" maxlength="254" required />
+      <input
+        type="hidden"
+        name="csrf_token"
+        value="{{ csrf_token() }}" />
 
-      <label class="field-label" for="password">Password</label>
-      <input id="password" type="password" name="password" class="form-control" placeholder="At least 8 characters" autocomplete="new-password" minlength="8" maxlength="256" required />
+      <label class="field-label" for="username">
+        Username
+      </label>
 
-      <label class="field-label" for="confirm_password">Confirm password</label>
-      <input id="confirm_password" type="password" name="confirm_password" class="form-control" placeholder="Retype your password" autocomplete="new-password" minlength="8" maxlength="256" required />
+      <input
+        id="username"
+        type="text"
+        name="username"
+        class="form-control"
+        placeholder="Choose a username"
+        autocomplete="username"
+        minlength="3"
+        maxlength="30"
+        required
+      />
 
-      <div id="register-validation" class="validation-card d-none" aria-live="polite"></div>
+      <label class="field-label" for="email">
+        Email address
+      </label>
+
+      <input
+        id="email"
+        type="email"
+        name="email"
+        class="form-control"
+        placeholder="you@example.com"
+        autocomplete="email"
+        maxlength="254"
+        required
+      />
+
+      <label class="field-label" for="password">
+        Password
+      </label>
+
+      <input
+        id="password"
+        type="password"
+        name="password"
+        class="form-control"
+        placeholder="At least 8 characters"
+        autocomplete="new-password"
+        minlength="8"
+        maxlength="256"
+        required
+      />
+
+      <label class="field-label" for="confirm_password">
+        Confirm password
+      </label>
+
+      <input
+        id="confirm_password"
+        type="password"
+        name="confirm_password"
+        class="form-control"
+        placeholder="Retype your password"
+        autocomplete="new-password"
+        minlength="8"
+        maxlength="256"
+        required
+      />
+
+      <div
+        id="register-validation"
+        class="validation-card d-none"
+        aria-live="polite">
+      </div>
+
       <div class="password-rules">
         <span>8+ characters</span>
         <span>Uppercase + lowercase</span>
         <span>At least 1 number</span>
-        <span>No weak or repeated sequences</span>
+        <span>No weak patterns</span>
       </div>
 
-      <button type="submit" class="btn btn-neon-primary w-100 mt-3">Create Account</button>
+      <button
+        type="submit"
+        class="btn btn-neon-primary w-100 mt-3">
+        Create Account
+      </button>
+
     </form>
 
     <p class="auth-switch">
       Already registered?
-      <a href="{{ url_for('login') }}">Log in here</a>
+      <a href="{{ url_for('login') }}">
+        Log in here
+      </a>
     </p>
+
   </div>
+
 </section>
 
 {% endblock %}
