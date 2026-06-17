@@ -108,7 +108,7 @@ class CogniCookAppTests(unittest.TestCase):
             )
             db.session.commit()
 
-    def get_csrf_token(self, path="/"):
+    def get_csrf_token(self, path="/login"):
         self.client.get(path)
         with self.client.session_transaction() as session:
             return session["_csrf_token"]
@@ -128,9 +128,9 @@ class CogniCookAppTests(unittest.TestCase):
         )
 
     def login_user(self, email="tester@example.com", password="SecurePass8"):
-        token = self.get_csrf_token("/")
+        token = self.get_csrf_token("/login")
         return self.client.post(
-            "/",
+            "/login",
             data={"email": email, "password": password, "csrf_token": token},
             follow_redirects=True,
         )
@@ -239,10 +239,10 @@ class CogniCookAppTests(unittest.TestCase):
 
     def test_login_rotates_csrf_token_after_authentication(self):
         self.register_user()
-        original_token = self.get_csrf_token("/")
+        original_token = self.get_csrf_token("/login")
 
         response = self.client.post(
-            "/",
+            "/login",
             data={"email": "tester@example.com", "password": "SecurePass8", "csrf_token": original_token},
             follow_redirects=False,
         )
@@ -403,11 +403,13 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIsNone(row)
 
     def test_auth_pages_use_contextual_greetings_without_security_hint(self):
-        login_response = self.client.get("/")
+        login_response = self.client.get("/login")
         login_text = login_response.get_data(as_text=True)
         self.assertIn("Welcome", login_text)
         self.assertIn('href="/register"', login_text)
         self.assertIn('class="brandmark" href="/dashboard"', login_text)
+        self.assertIn('href="/dashboard" class="btn btn-neon-secondary"', login_text)
+        self.assertIn('href="/login" class="btn btn-neon-secondary"', login_text)
         self.assertNotIn("Welcome Back", login_text)
         self.assertNotIn("Repeated failed logins are rate limited automatically", login_text)
 
@@ -927,22 +929,22 @@ class CogniCookAppTests(unittest.TestCase):
 
         for _ in range(5):
             response = self.client.post(
-                "/",
+                "/login",
                 data={
                     "email": "tester@example.com",
                     "password": "wrong-password",
-                    "csrf_token": self.get_csrf_token("/"),
+                    "csrf_token": self.get_csrf_token("/login"),
                 },
                 follow_redirects=False,
             )
             self.assertEqual(response.status_code, 200)
 
         response = self.client.post(
-            "/",
+            "/login",
             data={
                 "email": "tester@example.com",
                 "password": "wrong-password",
-                "csrf_token": self.get_csrf_token("/"),
+                "csrf_token": self.get_csrf_token("/login"),
             },
             follow_redirects=False,
         )
@@ -955,11 +957,11 @@ class CogniCookAppTests(unittest.TestCase):
 
         for index in range(5):
             response = self.client.post(
-                "/",
+                "/login",
                 data={
                     "email": "tester@example.com",
                     "password": "wrong-password",
-                    "csrf_token": self.get_csrf_token("/"),
+                    "csrf_token": self.get_csrf_token("/login"),
                 },
                 environ_overrides={"REMOTE_ADDR": f"10.0.0.{index + 1}"},
                 follow_redirects=False,
@@ -967,11 +969,11 @@ class CogniCookAppTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
 
         response = self.client.post(
-            "/",
+            "/login",
             data={
                 "email": "tester@example.com",
                 "password": "SecurePass8",
-                "csrf_token": self.get_csrf_token("/"),
+                "csrf_token": self.get_csrf_token("/login"),
             },
             environ_overrides={"REMOTE_ADDR": "10.0.0.99"},
             follow_redirects=False,
@@ -985,11 +987,11 @@ class CogniCookAppTests(unittest.TestCase):
 
         for value in ["1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4", "5.5.5.5"]:
             response = self.client.post(
-                "/",
+                "/login",
                 data={
                     "email": "tester@example.com",
                     "password": "wrong-password",
-                    "csrf_token": self.get_csrf_token("/"),
+                    "csrf_token": self.get_csrf_token("/login"),
                 },
                 headers={"X-Forwarded-For": value},
                 follow_redirects=False,
@@ -997,11 +999,11 @@ class CogniCookAppTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
 
         response = self.client.post(
-            "/",
+            "/login",
             data={
                 "email": "tester@example.com",
                 "password": "wrong-password",
-                "csrf_token": self.get_csrf_token("/"),
+                "csrf_token": self.get_csrf_token("/login"),
             },
             headers={"X-Forwarded-For": "6.6.6.6"},
             follow_redirects=False,
@@ -1135,7 +1137,8 @@ class CogniCookAppTests(unittest.TestCase):
             self.assertEqual(response.status_code, 400)
 
             response = self.client.get("/", headers={"Host": "good.test"})
-            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(response.headers.get("Location"), "/dashboard")
         finally:
             if original_trusted_hosts is None:
                 self.app.config.pop("TRUSTED_HOSTS", None)
@@ -1308,10 +1311,7 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertTrue(any(step == "Turn off the stove." for step in steps))
         self.assertTrue(any(step == "Serve warm." for step in steps))
 
-    def test_root_redirects_authenticated_users_to_dashboard(self):
-        self.register_user()
-        self.login_user()
-
+    def test_root_redirects_visitors_to_dashboard(self):
         response = self.client.get("/", follow_redirects=False)
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers.get("Location"), "/dashboard")
@@ -1356,7 +1356,8 @@ class CogniCookAppTests(unittest.TestCase):
 
         production_app = create_app(ProductionConfig)
         response = production_app.test_client().get("/", headers={"Host": "cognicook.example"})
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers.get("Location"), "/dashboard")
 
 
 if __name__ == "__main__":

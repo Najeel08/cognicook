@@ -155,7 +155,11 @@ def get_pagination_args():
 
 
 def register_routes(app):
-    @app.route("/", methods=["GET", "POST"])
+    @app.route("/", methods=["GET"])
+    def landing():
+        return redirect(url_for("dashboard"))
+
+    @app.route("/login", methods=["GET", "POST"])
     def login():
         if current_user.is_authenticated:
             return redirect(url_for("dashboard"))

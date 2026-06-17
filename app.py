@@ -20,6 +20,7 @@ from utils.validators import is_safe_input
 
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 ALLOWED_QUERY_PARAMS_BY_ENDPOINT = {
+    "landing": set(),
     "login": set(),
     "register": set(),
     "dashboard": set(),

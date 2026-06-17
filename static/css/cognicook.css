@@ -596,6 +596,11 @@ h3 {
     color: var(--text-main);
 }
 
+.topbar-actions .btn-neon-secondary[aria-current="page"] {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 0.1rem rgba(55, 198, 255, 0.16);
+}
+
 .btn-danger-soft {
     background: var(--danger-bg);
     color: var(--danger-text);
