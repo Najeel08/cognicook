@@ -4,7 +4,7 @@ SENTENCE_BOUNDARY_PATTERN = re.compile(r"(?<=[.!?])\s+")
 BULLET_PREFIX_PATTERN = re.compile(r"^\s*(?:[-*]|\d+[.)])\s*")
 STEP_PREFIX_PATTERN = re.compile(r"^\s*step\s*\d+\s*[:.)-]\s*", re.IGNORECASE)
 STEP_BOUNDARY_PATTERN = re.compile(
-    r"(?:^|(?<=[.!?]))\s*step\s*\d+\s*[:.)-]\s*",
+    r"(?:^|(?<=[.!?\n]))\s*step\s*\d+\s*[:.)-]\s*",
     re.IGNORECASE,
 )
 LEADING_SEQUENCE_PATTERN = re.compile(
