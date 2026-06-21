@@ -1,17 +1,19 @@
 import os
 from pathlib import Path
+import re
 import unittest
 
 os.environ["COGNICOOK_SKIP_APP_BOOTSTRAP"] = "1"
 
+from sqlalchemy import inspect
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.pool import StaticPool
 
 from app import create_app
+from config import BASE_DIR, resolve_project_path
 from extensions import db
 from models.favorite import Favorite
 from models.recipe import Recipe
-from models.search_activity import SearchActivity
 from models.user import User
 from services.data_loader import bootstrap_recipe_data, load_dataset_rows, normalize_instructions, normalize_row, replace_recipe_rows
 from services.recipe_service import get_similar_recommendations, get_strict_recommendations, parse_ingredient_query
@@ -135,6 +137,14 @@ class CogniCookAppTests(unittest.TestCase):
             follow_redirects=True,
         )
 
+    def test_relative_configuration_paths_resolve_from_project_root(self):
+        self.assertEqual(
+            resolve_project_path("instance/test.db", "unused"),
+            BASE_DIR / "instance" / "test.db",
+        )
+        absolute_path = BASE_DIR / "dataset" / "recipes.csv"
+        self.assertEqual(resolve_project_path(absolute_path, "unused"), absolute_path)
+
     def test_register_requires_csrf(self):
         response = self.client.post(
             "/register",
@@ -152,7 +162,13 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.register_user(email=".user@example.com")
         self.assertIn("Please enter a valid email address.", response.get_data(as_text=True))
 
-        response = self.register_user(username="ab")
+        response = self.register_user(email="amban@gmail.co")
+        self.assertIn("Please enter a valid email address.", response.get_data(as_text=True))
+
+        response = self.register_user(email="person@example.co")
+        self.assertIn("Welcome, tester_user", response.get_data(as_text=True))
+
+        response = self.register_user(username="ab", email="another@example.com")
         self.assertIn("Username must be 3 to 30 characters", response.get_data(as_text=True))
 
         response = self.register_user(password="weakpass")
@@ -172,7 +188,7 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.register_user(password="Password123")
         self.assertIn("Password is too common", response.get_data(as_text=True))
 
-    def test_register_rejects_mismatched_confirmation_and_duplicate_email(self):
+    def test_register_rejects_mismatched_confirmation_and_unavailable_identity(self):
         token = self.get_csrf_token("/register")
         response = self.client.post(
             "/register",
@@ -188,8 +204,15 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Password confirmation does not match.", response.get_data(as_text=True))
 
         self.register_user()
+
         response = self.register_user(username="second_user")
-        self.assertIn("Registration could not be completed.", response.get_data(as_text=True))
+        self.assertIn(
+            "Email address already in use. Please log in instead.",
+            response.get_data(as_text=True),
+        )
+
+        response = self.register_user(username="TESTER_USER", email="second@example.com")
+        self.assertIn("Username not available.", response.get_data(as_text=True))
 
     def test_register_rejects_overlong_username_without_truncating(self):
         response = self.register_user(username="a" * 31)
@@ -223,12 +246,16 @@ class CogniCookAppTests(unittest.TestCase):
 
     def test_register_and_login_flow_uses_expected_success_message(self):
         response = self.register_user(email="USER@Example.com")
+        registration_text = response.get_data(as_text=True)
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Registration successful. Account created successfully. Please log in.", response.get_data(as_text=True))
+        self.assertIn("Welcome, tester_user", registration_text)
+        self.assertIn("<h2>Login</h2>", registration_text)
+        self.assertNotIn("Welcome Back", registration_text)
 
         response = self.login_user(email="user@example.com")
         text = response.get_data(as_text=True)
         self.assertEqual(response.status_code, 200)
+        self.assertIn("Welcome, tester_user", text)
         self.assertIn("Search Recipes", text)
         self.assertNotIn("Recipe Explorer", text)
 
@@ -270,7 +297,7 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.login_user()
         text = response.get_data(as_text=True)
 
-        self.assertIn("Welcome back, tester_user", text)
+        self.assertIn("Welcome, tester_user", text)
         self.assertIn("Available ingredients", text)
         self.assertIn("Search Recipes", text)
         self.assertNotIn("Recipe Explorer", text)
@@ -301,6 +328,10 @@ class CogniCookAppTests(unittest.TestCase):
             clean_ingredients("ginger-garlic paste"),
             ["ginger", "garlic"],
         )
+        self.assertEqual(
+            clean_ingredients("cashew nuts, cashew, cashews"),
+            ["cashew nuts"],
+        )
 
     def test_instruction_parser_preserves_single_action_phrases(self):
         self.assertEqual(
@@ -313,6 +344,51 @@ class CogniCookAppTests(unittest.TestCase):
             split_instruction_block("Step 1: Heat oil. Step 2: Add onion."),
             ["Heat oil.", "Add onion."],
         )
+
+    def test_instruction_parser_preserves_compact_explicit_steps(self):
+        self.assertEqual(
+            split_instruction_block(
+                "Step 1: Boil potato until soft.Peel and mash completely."
+                "Step 2: Heat oil.Add onion and saute until soft."
+            ),
+            [
+                "Boil potato until soft.Peel and mash completely.",
+                "Heat oil.Add onion and saute until soft.",
+            ],
+        )
+
+    def test_all_dataset_step_labels_create_clean_step_cards(self):
+        rows = load_dataset_rows(BASE_DIR / "dataset" / "recipes.csv")
+        step_label_pattern = re.compile(
+            r"(?:^|(?<=[.!?]))\s*step\s*\d+\s*[:.)-]\s*",
+            re.IGNORECASE,
+        )
+
+        for row in rows:
+            labels = step_label_pattern.findall(row["instructions"])
+            steps = split_instruction_block(row["instructions"])
+            if labels:
+                self.assertEqual(
+                    len(steps),
+                    len(labels),
+                    f"{row['title']} did not preserve its explicit step count",
+                )
+            self.assertFalse(
+                any(step_label_pattern.search(step) for step in steps),
+                f"{row['title']} retained an embedded step label",
+            )
+
+        chicken_cutlet = next(row for row in rows if row["title"] == "chicken cutlet")
+        cutlet_steps = split_instruction_block(chicken_cutlet["instructions"])
+        self.assertEqual(len(cutlet_steps), 7)
+        self.assertTrue(cutlet_steps[3].startswith("Add shredded chicken"))
+        self.assertTrue(cutlet_steps[-1].startswith("Drain excess oil"))
+
+    def test_raw_and_canonical_datasets_normalize_identically(self):
+        raw_rows = load_dataset_rows(BASE_DIR / "dataset" / "raw_recipes.csv")
+        canonical_rows = load_dataset_rows(BASE_DIR / "dataset" / "recipes.csv")
+
+        self.assertEqual(raw_rows, canonical_rows)
 
     def test_data_loader_preserves_multiline_instruction_boundaries(self):
         self.assertEqual(
@@ -425,7 +501,9 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn('class="brandmark" href="/dashboard"', login_text)
         self.assertIn('href="/dashboard" class="btn btn-neon-secondary"', login_text)
         self.assertIn('href="/login" class="btn btn-neon-secondary"', login_text)
-        self.assertNotIn("Welcome Back", login_text)
+        self.assertIn('aria-label="Primary navigation"', login_text)
+        self.assertNotIn("bootstrap.bundle.min.js", login_text)
+        self.assertNotIn("welcome back", login_text.lower())
         self.assertNotIn("Repeated failed logins are rate limited automatically", login_text)
 
         register_response = self.client.get("/register")
@@ -451,11 +529,7 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("View Similar Recipes", text)
         self.assertNotIn("Similar Matches", text)
 
-        with self.app.app_context():
-            self.assertEqual(SearchActivity.query.count(), 1)
-            activity = SearchActivity.query.first()
-            self.assertEqual(activity.normalized_ingredients, "onion, tomato, potato")
-            self.assertEqual(activity.result_count, 1)
+
 
     def test_free_text_ingredient_query_splits_known_ingredients(self):
         with self.app.app_context():
@@ -645,8 +719,7 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Log in to Save", text)
         self.assertNotIn(">Save</button>", text)
 
-        with self.app.app_context():
-            self.assertEqual(SearchActivity.query.count(), 0)
+
 
     def test_pagination_marks_current_and_disabled_controls_for_screen_readers(self):
         self.register_user()
@@ -941,6 +1014,11 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Remove", text)
         self.assertIn("Back to Dashboard", text)
 
+        response = self.client.get("/favorites?page=2&per_page=1")
+        page_two_text = response.get_data(as_text=True)
+        self.assertIn("Simple Curry", page_two_text)
+        self.assertNotIn("Paneer Masala", page_two_text)
+
         token = self.get_csrf_token("/favorites")
         self.client.post("/favorite/1/remove", data={"csrf_token": token}, follow_redirects=True)
 
@@ -1144,6 +1222,8 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertEqual(response.headers.get("Permissions-Policy"), "camera=(), microphone=(), geolocation=()")
         self.assertIn("Content-Security-Policy", response.headers)
         self.assertIn("connect-src 'self'", response.headers["Content-Security-Policy"])
+        self.assertIn("script-src 'self'", response.headers["Content-Security-Policy"])
+        self.assertNotIn("script-src 'self' https://cdn.jsdelivr.net", response.headers["Content-Security-Policy"])
         self.assertNotIn("'unsafe-inline'", response.headers["Content-Security-Policy"])
 
     def test_hsts_header_is_configurable_for_production_like_environments(self):
@@ -1183,6 +1263,14 @@ class CogniCookAppTests(unittest.TestCase):
             else:
                 self.app.config["TRUSTED_HOSTS"] = original_trusted_hosts
 
+    def test_error_pages_return_visitors_to_public_dashboard(self):
+        response = self.client.get("/missing-page")
+        text = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 404)
+        self.assertIn('href="/dashboard"', text)
+        self.assertIn("Go to Dashboard", text)
+
     def test_method_not_allowed_uses_consistent_error_view(self):
         response = self.client.get("/logout")
         text = response.get_data(as_text=True)
@@ -1217,20 +1305,25 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertNotEqual(response.headers.get("Pragma"), "no-cache")
         response.close()
 
-    def test_activity_summary_report_requires_login_and_lists_user_searches(self):
-        response = self.client.get("/activity", follow_redirects=False)
-        self.assertEqual(response.status_code, 302)
+        response = self.client.get("/static/js/cognicook.js")
+        script_text = response.get_data(as_text=True)
+        self.assertNotIn("window.location.reload", script_text)
+        self.assertNotIn("cognicook-history-reload", script_text)
+        response.close()
 
+    def test_search_history_is_not_stored_or_exposed(self):
         self.register_user()
         self.login_user()
         self.client.get("/recommendations?ingredients=onion,tomato,potato")
 
-        response = self.client.get("/activity")
-        text = response.get_data(as_text=True)
+        response = self.client.get("/activity", follow_redirects=False)
+        self.assertEqual(response.status_code, 404)
 
-        self.assertIn("User Activity Summary Report", text)
-        self.assertIn("onion, tomato, potato", text)
-        self.assertIn("1 exact result", text)
+        dashboard_text = self.client.get("/dashboard").get_data(as_text=True)
+        self.assertNotIn(">Activity</a>", dashboard_text)
+
+        with self.app.app_context():
+            self.assertFalse(inspect(db.engine).has_table("search_activity"))
 
     def test_recipe_detail_is_available_before_login_with_login_save_prompt(self):
         response = self.client.get("/recipe/1", follow_redirects=False)

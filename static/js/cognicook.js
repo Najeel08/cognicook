@@ -1,30 +1,3 @@
-const historyReloadKey = `cognicook-history-reload:${window.location.pathname}${window.location.search}`;
-
-window.addEventListener("pageshow", (event) => {
-    const navigationEntry = performance.getEntriesByType("navigation")[0];
-    const restoredFromHistory = event.persisted || navigationEntry?.type === "back_forward";
-
-    if (!restoredFromHistory) {
-        try {
-            window.sessionStorage.removeItem(historyReloadKey);
-        } catch (error) {
-            // Session storage can be unavailable in strict/private browsing contexts.
-        }
-        return;
-    }
-
-    try {
-        if (window.sessionStorage.getItem(historyReloadKey) === "1") {
-            window.sessionStorage.removeItem(historyReloadKey);
-            return;
-        }
-        window.sessionStorage.setItem(historyReloadKey, "1");
-    } catch (error) {
-        return;
-    }
-
-    window.location.reload();
-});
 
 document.addEventListener("DOMContentLoaded", () => {
     const buttons = document.querySelectorAll(".btn-neon-primary, .btn-neon-secondary, .btn-danger-soft");
@@ -163,12 +136,15 @@ function initializeRegisterValidation() {
     function isValidEmail(email) {
         const value = email.trim();
         const localPart = value.split("@", 1)[0];
+        const domain = value.split("@").at(-1).toLowerCase();
+        const knownDomainTypos = new Set(["gmail.co"]);
         const emailPattern = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
         return (
             value.length <= 254
             && !value.includes("..")
             && !localPart.startsWith(".")
             && !localPart.endsWith(".")
+            && !knownDomainTypos.has(domain)
             && emailPattern.test(value)
         );
     }

@@ -3,6 +3,10 @@ import re
 SENTENCE_BOUNDARY_PATTERN = re.compile(r"(?<=[.!?])\s+")
 BULLET_PREFIX_PATTERN = re.compile(r"^\s*(?:[-*]|\d+[.)])\s*")
 STEP_PREFIX_PATTERN = re.compile(r"^\s*step\s*\d+\s*[:.)-]\s*", re.IGNORECASE)
+STEP_BOUNDARY_PATTERN = re.compile(
+    r"(?:^|(?<=[.!?]))\s*step\s*\d+\s*[:.)-]\s*",
+    re.IGNORECASE,
+)
 LEADING_SEQUENCE_PATTERN = re.compile(
     r"^(?:and|first|next|then|now|meanwhile|finally|lastly|afterward|afterwards|subsequently)\s+",
     re.IGNORECASE,
@@ -65,6 +69,14 @@ def split_instruction_block(text):
     normalized = str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
     if not normalized:
         return []
+
+    if STEP_BOUNDARY_PATTERN.search(normalized):
+        explicit_steps = [
+            clean_instruction_fragment(part)
+            for part in STEP_BOUNDARY_PATTERN.split(normalized)
+            if part.strip()
+        ]
+        return [finalize_instruction_step(step) for step in explicit_steps if step]
 
     lines = [clean_instruction_fragment(line) for line in normalized.split("\n") if line.strip()]
     if len(lines) > 1:

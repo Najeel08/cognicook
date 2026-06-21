@@ -27,7 +27,6 @@ ALLOWED_QUERY_PARAMS_BY_ENDPOINT = {
     "recommendations": {"ingredients", "page", "per_page"},
     "similar_recipes_page": {"ingredients", "diet", "difficulty", "sort", "page", "per_page"},
     "favorites": {"page", "per_page"},
-    "activity_summary": {"page", "per_page"},
     "favorite": set(),
     "remove_favorite": set(),
     "recipe_detail": {"next"},
@@ -110,9 +109,10 @@ def prepare_database_file(app):
             try:
                 recover_sqlite_file(database_path, recovered_path)
             except (RuntimeError, sqlite3.Error) as e:
-                app.logger.error(
+                app.logger.exception(
                     "Database recovery failed for %s: %s. Using empty database.",
-                    database_path, e
+                    database_path,
+                    e,
                 )
                 recovered_path = choose_recovered_database_path(database_path)
 
@@ -150,6 +150,40 @@ def ensure_recipe_schema():
                     "recipe_id": row["id"],
                 },
             )
+
+
+def ensure_user_schema(app):
+    inspector = inspect(db.engine)
+    if not inspector.has_table("user"):
+        return
+
+    with db.engine.begin() as connection:
+        duplicate = connection.execute(
+            text(
+                "SELECT lower(name) AS normalized_name, COUNT(*) AS total "
+                "FROM user GROUP BY lower(name) HAVING COUNT(*) > 1 LIMIT 1"
+            )
+        ).first()
+        if duplicate:
+            app.logger.warning(
+                "Case-insensitive username uniqueness could not be enforced because duplicate usernames already exist."
+            )
+            return
+
+        connection.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_name_nocase "
+                "ON user (name COLLATE NOCASE)"
+            )
+        )
+
+
+def remove_retired_search_activity_schema():
+    if not inspect(db.engine).has_table("search_activity"):
+        return
+
+    with db.engine.begin() as connection:
+        connection.execute(text("DROP TABLE search_activity"))
 
 
 def create_app(config_object=Config):
@@ -395,7 +429,7 @@ def create_app(config_object=Config):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "style-src 'self' https://cdn.jsdelivr.net; "
-            "script-src 'self' https://cdn.jsdelivr.net; "
+            "script-src 'self'; "
             "img-src 'self' data:; "
             "font-src 'self' https://cdn.jsdelivr.net; "
             "connect-src 'self'; "
@@ -422,11 +456,12 @@ def create_app(config_object=Config):
     with app.app_context():
         from models.favorite import Favorite
         from models.recipe import Recipe
-        from models.search_activity import SearchActivity
         from models.user import User
 
         db.create_all()
+        ensure_user_schema(app)
         ensure_recipe_schema()
+        remove_retired_search_activity_schema()
         if app.config.get("AUTO_BOOTSTRAP_DATA", True):
             from services.data_loader import bootstrap_recipe_data
 
@@ -504,6 +539,7 @@ def create_app(config_object=Config):
             request.method,
             request.path,
             type(error).__name__,
+            exc_info=(type(error), error, error.__traceback__),
         )
         return render_template(
             "error_view.html",
@@ -514,12 +550,14 @@ def create_app(config_object=Config):
 
     @app.errorhandler(500)
     def server_error(error):
+        exception = getattr(error, "original_exception", None) or error
         app.logger.error(
             "server_error endpoint=%s method=%s path=%s error_type=%s",
             request.endpoint,
             request.method,
             request.path,
-            type(error).__name__,
+            type(exception).__name__,
+            exc_info=(type(exception), exception, exception.__traceback__),
         )
         return render_template(
             "error_view.html",

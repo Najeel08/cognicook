@@ -4,9 +4,22 @@ from datetime import timedelta
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-INSTANCE_PATH = Path(os.environ.get("COGNICOOK_DATA_DIR") or (BASE_DIR / "instance"))
-DATABASE_PATH = Path(os.environ.get("COGNICOOK_DB_PATH") or (INSTANCE_PATH / "cognicook.db"))
-DATASET_PATH = Path(os.environ.get("COGNICOOK_DATASET_PATH") or (BASE_DIR / "dataset" / "recipes.csv"))
+
+
+def resolve_project_path(value, default):
+    path = Path(value).expanduser() if value else Path(default)
+    return path if path.is_absolute() else BASE_DIR / path
+
+
+INSTANCE_PATH = resolve_project_path(os.environ.get("COGNICOOK_DATA_DIR"), "instance")
+DATABASE_PATH = resolve_project_path(
+    os.environ.get("COGNICOOK_DB_PATH"),
+    INSTANCE_PATH / "cognicook.db",
+)
+DATASET_PATH = resolve_project_path(
+    os.environ.get("COGNICOOK_DATASET_PATH"),
+    "dataset/recipes.csv",
+)
 APP_ENV = os.environ.get("COGNICOOK_ENV", os.environ.get("FLASK_ENV", "development")).strip().lower()
 IS_PRODUCTION = APP_ENV == "production"
 DEFAULT_SECURE_COOKIE = "1" if APP_ENV == "production" else "0"

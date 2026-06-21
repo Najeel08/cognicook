@@ -11,7 +11,7 @@ os.environ.setdefault("COGNICOOK_SKIP_APP_BOOTSTRAP", "1")
 
 from services.data_loader import load_dataset_rows
 
-DEFAULT_INPUT = BASE_DIR / "dataset" / "Recipes Dataset(Recipes).csv"
+DEFAULT_INPUT = BASE_DIR / "dataset" / "raw_recipes.csv"
 DEFAULT_OUTPUT = BASE_DIR / "dataset" / "recipes.csv"
 OUTPUT_COLUMNS = [
     "title",

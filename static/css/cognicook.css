@@ -52,7 +52,7 @@
     --info-border: rgba(55, 198, 255, 0.22);
     --warning-border: rgba(55, 198, 255, 0.22);
     --error-border: rgba(255, 109, 143, 0.26);
-    --separator: rgba(139, 161, 189, 0.4);
+
     --step-bg:
         linear-gradient(135deg, rgba(61, 255, 191, 0.08), transparent 34%),
         rgba(255, 255, 255, 0.045);
@@ -137,7 +137,7 @@
     --info-border: rgba(75, 141, 255, 0.28);
     --warning-border: rgba(139, 113, 255, 0.28);
     --error-border: rgba(217, 77, 114, 0.28);
-    --separator: rgba(102, 112, 133, 0.42);
+
     --step-bg:
         linear-gradient(135deg, rgba(32, 199, 189, 0.12), transparent 36%),
         rgba(255, 255, 255, 0.62);
@@ -303,7 +303,6 @@ button,
 }
 
 .brandmark:focus-visible,
-.ghost-link:focus-visible,
 .theme-toggle:focus-visible,
 .btn:focus-visible,
 .page-link-neon:focus-visible,
@@ -361,17 +360,6 @@ button,
     flex-wrap: wrap;
 }
 
-.ghost-link {
-    color: var(--text-muted);
-    border-radius: 999px;
-    padding: 0.35rem 0.1rem;
-}
-
-.ghost-link:hover,
-.ghost-link[aria-current="page"] {
-    color: var(--text-main);
-    transform: translateY(-1px);
-}
 
 .theme-toggle {
     appearance: none;
@@ -591,8 +579,7 @@ h3 {
     border: 1px solid var(--secondary-border);
 }
 
-.btn-neon-secondary:hover,
-.btn-danger-soft:hover {
+.btn-neon-secondary:hover {
     color: var(--text-main);
 }
 
@@ -746,18 +733,6 @@ h3 {
     grid-template-columns: repeat(1, minmax(0, 1fr));
 }
 
-.activity-list {
-    display: grid;
-    gap: 1rem;
-}
-
-.activity-card {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
 
 .recipe-card {
     display: flex;
@@ -783,11 +758,6 @@ h3 {
     color: var(--text-soft);
 }
 
-.meta-separator::before {
-    content: "|";
-    margin: 0 0.45rem;
-    color: var(--separator);
-}
 
 .match-group {
     display: grid;
@@ -865,6 +835,8 @@ h3 {
 .instruction-step {
     position: relative;
     display: grid;
+    align-content: start;
+    align-items: start;
     gap: 0.45rem;
     padding: 1rem 1rem 1rem 1.15rem;
     border-radius: 18px;
@@ -892,8 +864,11 @@ h3 {
 }
 
 .step-text {
+    display: block;
+    align-self: start;
     color: var(--text-main);
     line-height: 1.65;
+    text-align: left;
     overflow-wrap: anywhere;
 }
 
@@ -1052,9 +1027,14 @@ h3 {
     }
 
     .topbar-actions {
-        gap: 0.55rem;
+        gap: 0.45rem;
         justify-content: flex-end;
         margin-left: auto;
+    }
+
+    .topbar-actions .btn {
+        padding: 0.52rem 0.72rem;
+        font-size: 0.86rem;
     }
 
     .theme-toggle-track {

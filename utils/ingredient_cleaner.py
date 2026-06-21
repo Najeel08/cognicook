@@ -126,6 +126,7 @@ COMPOUND_INGREDIENTS = {
 }
 
 PROTECTED_INGREDIENTS = {
+    "cashew nuts": "cashewnutsingredient",
     "green gram": "greengramingredient",
     "black gram": "blackgramingredient",
     "horse gram": "horsegramingredient",
@@ -183,9 +184,6 @@ def clean_ingredients(value):
 
     return list(dict.fromkeys(ingredients))
 
-
-def normalize_ingredient_tokens(value):
-    return clean_ingredients(value)
 
 
 def normalize_ingredient_text(value):

@@ -4,7 +4,7 @@
 <section class="hero-panel glass-panel dashboard-panel dashboard-home">
   <div class="dashboard-hero-copy">
     {% if current_user.is_authenticated %}
-    <p class="eyebrow">Welcome back, {{ current_user.username|default(current_user.name, true) }}</p>
+    <p class="eyebrow">Welcome, {{ current_user.username|default(current_user.name, true) }}</p>
     {% else %}
     <p class="eyebrow">Welcome to CogniCook</p>
     {% endif %}

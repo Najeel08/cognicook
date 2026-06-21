@@ -55,7 +55,6 @@ def get_filter_options():
     return {
         "diets": DIET_OPTIONS,
         "difficulties": DIFFICULTY_OPTIONS,
-        "sorts": SIMILAR_SORT_OPTIONS,
     }
 
 
@@ -63,9 +62,6 @@ def normalize_query_words(value):
     text = str(value or "").lower().replace("&", " and ")
     return WORD_PATTERN.findall(text)
 
-
-def searchable_text(value):
-    return " ".join(normalize_query_words(value))
 
 
 def exact_searchable_text(value):

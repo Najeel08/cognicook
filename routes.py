@@ -1,6 +1,5 @@
 import secrets
 from urllib.parse import urlsplit
-from time import time
 
 from flask import abort, current_app, flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required, login_user, logout_user
@@ -10,7 +9,6 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from extensions import db
 from models.favorite import Favorite
 from models.recipe import Recipe
-from models.search_activity import SearchActivity
 from models.user import User
 from services.recipe_service import (
     DIET_OPTIONS,
@@ -21,7 +19,7 @@ from services.recipe_service import (
     get_strict_recommendations,
 )
 from utils.ingredient_cleaner import clean_ingredients
-from utils.pagination import paginate_list
+from utils.pagination import paginate_list, paginate_query
 from utils.validators import (
     get_positive_int,
     is_valid_email,
@@ -97,21 +95,6 @@ def get_favorite_recipe_ids(recipe_ids):
         .all()
     }
 
-
-def record_search_activity(ingredients_input, normalized_ingredients, result_count, page):
-    if not current_user.is_authenticated or page != 1:
-        return
-
-    db.session.add(
-        SearchActivity(
-            user_id=current_user.id,
-            ingredients=ingredients_input,
-            normalized_ingredients=", ".join(normalized_ingredients),
-            result_count=result_count,
-            created_at=time(),
-        )
-    )
-    db.session.commit()
 
 
 def flash_errors(errors):
@@ -194,7 +177,7 @@ def register_routes(app):
                 login_user(user)
                 session.permanent = True
                 security_tools["rotate_csrf_token"]()
-                flash("Dashboard ready.", "success")
+                flash(f"Welcome, {user.username}", "success")
                 return redirect(url_for("dashboard"))
 
             security_tools["record_auth_failure"](email)
@@ -239,10 +222,11 @@ def register_routes(app):
             if password != confirm_password:
                 errors.append("Password confirmation does not match.")
 
+            if User.query.filter(db.func.lower(User.name) == username.casefold()).first():
+                errors.append("Username not available.")
+
             if User.query.filter_by(email=email).first():
-                errors.append(
-                    "Registration could not be completed. Use a different email address or sign in if you already have an account."
-                )
+                errors.append("Email address already in use. Please log in instead.")
 
             if errors:
                 security_tools["record_auth_failure"](email)
@@ -258,14 +242,16 @@ def register_routes(app):
             except IntegrityError:
                 db.session.rollback()
                 security_tools["record_auth_failure"](email)
-                flash(
-                    "Registration could not be completed. Use a different email address or sign in if you already have an account.",
-                    "danger",
-                )
+                if User.query.filter(db.func.lower(User.name) == username.casefold()).first():
+                    flash("Username not available.", "danger")
+                elif User.query.filter_by(email=email).first():
+                    flash("Email address already in use. Please log in instead.", "danger")
+                else:
+                    flash("Registration could not be completed. Please try again.", "danger")
                 return redirect(url_for("register"))
 
             security_tools["clear_auth_failures"](email)
-            flash("Registration successful. Account created successfully. Please log in.", "success")
+            flash(f"Welcome, {user.username}", "success")
             return redirect(url_for("login"))
 
         return render_template("register_v2.html", title="Register")
@@ -296,12 +282,6 @@ def register_routes(app):
         page, per_page = get_pagination_args()
 
         recommendation_data = get_strict_recommendations(ingredients_input, page=page, per_page=per_page)
-        record_search_activity(
-            ingredients_input,
-            recommendation_data["ingredients"],
-            recommendation_data["strict"].total,
-            page,
-        )
         recipe_ids = {recipe.id for recipe in recommendation_data["strict"].items}
         favorite_recipe_ids = get_favorite_recipe_ids(recipe_ids)
 
@@ -356,36 +336,13 @@ def register_routes(app):
             Recipe.query.join(Favorite, Favorite.recipe_id == Recipe.id)
             .filter(Favorite.user_id == current_user.id)
             .order_by(Recipe.title.asc())
-            .all()
         )
-        favorites_pagination = paginate_list(favorite_recipes, page, per_page)
+        favorites_pagination = paginate_query(favorite_recipes, page, per_page)
 
         return render_template(
             "favorite_list.html",
             title="Favorites",
             favorites_pagination=favorites_pagination,
-            per_page=per_page,
-        )
-
-    @app.route("/activity", methods=["GET"])
-    @login_required
-    def activity_summary():
-        page, per_page = get_pagination_args()
-
-        favorite_count = Favorite.query.filter_by(user_id=current_user.id).count()
-        activities = (
-            SearchActivity.query.filter_by(user_id=current_user.id)
-            .order_by(SearchActivity.created_at.desc())
-            .all()
-        )
-        activity_pagination = paginate_list(activities, page, per_page)
-
-        return render_template(
-            "activity_summary.html",
-            title="Activity Summary",
-            activity_pagination=activity_pagination,
-            search_count=len(activities),
-            favorite_count=favorite_count,
             per_page=per_page,
         )
 

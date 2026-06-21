@@ -35,3 +35,12 @@ def paginate_list(items, page, per_page):
     start = (current_page - 1) * per_page
     end = start + per_page
     return SimplePagination(items[start:end], current_page, per_page, total)
+
+
+def paginate_query(query, page, per_page):
+    total = query.count()
+    pages = max(1, math.ceil(total / per_page)) if per_page else 1
+    current_page = min(max(page, 1), pages)
+    offset = (current_page - 1) * per_page
+    items = query.offset(offset).limit(per_page).all()
+    return SimplePagination(items, current_page, per_page, total)

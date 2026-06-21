@@ -5,7 +5,7 @@ from extensions import db, login_manager
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100, collation="NOCASE"), unique=True, nullable=False)
     email = db.Column(db.String(254), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
 

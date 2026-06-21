@@ -6,6 +6,7 @@ EMAIL_PATTERN = re.compile(
     r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
     r"[A-Za-z]{2,63}$"
 )
+KNOWN_EMAIL_DOMAIN_TYPOS = {"gmail.co"}
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{3,30}$")
 UPPERCASE_PATTERN = re.compile(r"[A-Z]")
 LOWERCASE_PATTERN = re.compile(r"[a-z]")
@@ -98,7 +99,10 @@ def is_valid_email(value):
     local_part = email.split("@", 1)[0]
     if local_part.startswith(".") or local_part.endswith("."):
         return False
-    return bool(EMAIL_PATTERN.fullmatch(email))
+    if not EMAIL_PATTERN.fullmatch(email):
+        return False
+    domain = email.rsplit("@", 1)[1].lower()
+    return domain not in KNOWN_EMAIL_DOMAIN_TYPOS
 
 
 def is_valid_username(value):
