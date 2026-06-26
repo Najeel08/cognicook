@@ -311,6 +311,12 @@ button,
     box-shadow: var(--focus-ring);
 }
 
+.form-control:focus-visible,
+.form-select:focus-visible {
+    outline: 2px solid var(--input-focus-border);
+    outline-offset: 1px;
+}
+
 .brandmark-icon {
     display: inline-grid;
     place-items: center;
@@ -499,6 +505,20 @@ h3 {
 .recipe-detail-layout {
     display: grid;
     gap: 1.25rem;
+}
+
+.detail-section {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.search-panel-header {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.search-panel-copy {
+    color: var(--text-muted);
 }
 
 .dashboard-panel {
@@ -720,6 +740,14 @@ h3 {
     grid-template-columns: repeat(1, minmax(0, 1fr));
 }
 
+.favorites-filter-grid,
+.strict-filter-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    margin-top: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--surface-border);
+}
+
 .filter-actions {
     display: flex;
     gap: 0.75rem;
@@ -844,6 +872,17 @@ h3 {
     border: 1px solid var(--step-border);
     color: var(--text-main);
     overflow: hidden;
+    transition:
+        transform 0.22s ease,
+        border-color 0.22s ease,
+        box-shadow 0.22s ease,
+        background 0.22s ease;
+}
+
+.instruction-step:hover {
+    transform: translateY(-3px);
+    border-color: var(--card-hover-border);
+    box-shadow: var(--card-hover-shadow);
 }
 
 .instruction-step::before {
@@ -959,6 +998,11 @@ h3 {
         scroll-behavior: auto !important;
         transition-duration: 0.01ms !important;
     }
+
+    .glass-card:hover,
+    .instruction-step:hover {
+        transform: none;
+    }
 }
 
 @media (min-width: 768px) {
@@ -994,6 +1038,12 @@ h3 {
 
     .compact-filter-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
+        align-items: end;
+    }
+
+    .favorites-filter-grid,
+    .strict-filter-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         align-items: end;
     }
 

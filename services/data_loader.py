@@ -84,7 +84,9 @@ def normalize_instructions(value):
     normalized_lines = []
     for line in lines:
         normalized = line.rstrip(". ")
-        if normalized and normalized[-1] not in "!?":
+        if not normalized:
+            continue
+        if normalized[-1] not in "!?":
             normalized = f"{normalized}."
         normalized_lines.append(normalized)
 

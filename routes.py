@@ -19,7 +19,7 @@ from services.recipe_service import (
     get_strict_recommendations,
 )
 from utils.ingredient_cleaner import clean_ingredients
-from utils.pagination import paginate_list, paginate_query
+from utils.pagination import paginate_query
 from utils.validators import (
     get_positive_int,
     is_valid_email,
@@ -96,7 +96,6 @@ def get_favorite_recipe_ids(recipe_ids):
     }
 
 
-
 def flash_errors(errors):
     for error in errors:
         flash(error, "danger")
@@ -159,9 +158,12 @@ def register_routes(app):
             if (
                 not is_safe_input(email, max_length=254, allow_path_separators=False)
                 or not is_valid_email(email)
-                or len(password) > MAX_PASSWORD_INPUT_LENGTH
             ):
                 security_tools["record_auth_failure"](email)
+                flash("Invalid email or password.", "danger")
+                return render_template("login_v2.html", title="Login")
+
+            if len(password) > MAX_PASSWORD_INPUT_LENGTH:
                 flash("Invalid email or password.", "danger")
                 return render_template("login_v2.html", title="Login")
 
@@ -280,8 +282,13 @@ def register_routes(app):
             return redirect(url_for("dashboard"))
 
         page, per_page = get_pagination_args()
+        diet = sanitize_choice(request.args.get("diet"), DIET_OPTIONS)
+        difficulty = sanitize_choice(request.args.get("difficulty"), DIFFICULTY_OPTIONS)
 
-        recommendation_data = get_strict_recommendations(ingredients_input, page=page, per_page=per_page)
+        recommendation_data = get_strict_recommendations(
+            ingredients_input, page=page, per_page=per_page,
+            diet=diet, difficulty=difficulty,
+        )
         recipe_ids = {recipe.id for recipe in recommendation_data["strict"].items}
         favorite_recipe_ids = get_favorite_recipe_ids(recipe_ids)
 
@@ -293,6 +300,8 @@ def register_routes(app):
             ingredients_text=recommendation_data["ingredients_text"],
             favorite_recipe_ids=favorite_recipe_ids,
             per_page=per_page,
+            filters={"diet": diet, "difficulty": difficulty},
+            filter_options=get_filter_options(),
         )
 
     @app.route("/similar", methods=["GET"])
@@ -331,12 +340,19 @@ def register_routes(app):
     @login_required
     def favorites():
         page, per_page = get_pagination_args()
+        diet = sanitize_choice(request.args.get("diet"), DIET_OPTIONS)
+        difficulty = sanitize_choice(request.args.get("difficulty"), DIFFICULTY_OPTIONS)
 
         favorite_recipes = (
             Recipe.query.join(Favorite, Favorite.recipe_id == Recipe.id)
             .filter(Favorite.user_id == current_user.id)
-            .order_by(Recipe.title.asc())
         )
+        if diet:
+            favorite_recipes = favorite_recipes.filter(Recipe.diet_type == diet)
+        if difficulty:
+            favorite_recipes = favorite_recipes.filter(Recipe.difficulty == difficulty)
+
+        favorite_recipes = favorite_recipes.order_by(Recipe.title.asc())
         favorites_pagination = paginate_query(favorite_recipes, page, per_page)
 
         return render_template(
@@ -344,6 +360,8 @@ def register_routes(app):
             title="Favorites",
             favorites_pagination=favorites_pagination,
             per_page=per_page,
+            filters={"diet": diet, "difficulty": difficulty},
+            filter_options=get_filter_options(),
         )
 
     @app.route("/favorite/<int:recipe_id>", methods=["POST"])

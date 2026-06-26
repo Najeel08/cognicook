@@ -529,8 +529,6 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("View Similar Recipes", text)
         self.assertNotIn("Similar Matches", text)
 
-
-
     def test_free_text_ingredient_query_splits_known_ingredients(self):
         with self.app.app_context():
             db.session.add(
@@ -718,8 +716,6 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Simple Curry", text)
         self.assertIn("Log in to Save", text)
         self.assertNotIn(">Save</button>", text)
-
-
 
     def test_pagination_marks_current_and_disabled_controls_for_screen_readers(self):
         self.register_user()

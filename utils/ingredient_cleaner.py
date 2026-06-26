@@ -73,8 +73,6 @@ PLURAL_MAP = {
     "potatoes": "potato",
     "onions": "onion",
     "eggs": "egg",
-    "chilies": "green chilli",
-    "chillies": "green chilli",
     "green chilies": "green chilli",
     "green chillies": "green chilli",
     "lentils": "lentil",
@@ -183,7 +181,6 @@ def clean_ingredients(value):
         ingredients.append(INGREDIENT_ALIASES.get(ingredient, ingredient))
 
     return list(dict.fromkeys(ingredients))
-
 
 
 def normalize_ingredient_text(value):

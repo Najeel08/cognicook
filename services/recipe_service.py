@@ -63,7 +63,6 @@ def normalize_query_words(value):
     return WORD_PATTERN.findall(text)
 
 
-
 def exact_searchable_text(value):
     text = str(value or "").lower().replace("&", " and ")
     return " ".join(EXACT_TEXT_PATTERN.findall(text))
@@ -268,8 +267,10 @@ def sort_similar_matches(matches, sort_key):
         return
 
     if sort_key == "title_desc":
-        matches.sort(key=lambda item: (-item["relevance_score"], item["missing_count"]))
-        matches.sort(key=lambda item: item["recipe"].title.lower(), reverse=True)
+        matches.sort(
+            key=lambda item: (item["recipe"].title.lower(), -item["relevance_score"], item["missing_count"]),
+            reverse=True,
+        )
         return
 
     if sort_key == "time_asc":
@@ -318,19 +319,28 @@ def relevance_percent(match_ratio, query_coverage, similarity_score, missing_cou
     return round(max(0, min(1, weighted_score)) * 100)
 
 
-def get_strict_recommendations(ingredients_text, page, per_page):
+def get_strict_recommendations(ingredients_text, page, per_page, diet="", difficulty=""):
     user_ingredients, normalized_input = parse_ingredient_query(ingredients_text)
     user_ingredient_set = set(user_ingredients) - BASIC_INGREDIENTS
     matches = []
     seen_recipes = set()
 
     if user_ingredients:
-        for recipe in Recipe.query.order_by(Recipe.id.asc()).all():
+        query = Recipe.query.order_by(Recipe.id.asc())
+        if diet:
+            query = query.filter(Recipe.diet_type == diet)
+        if difficulty:
+            query = query.filter(Recipe.difficulty == difficulty)
+
+        for recipe in query.all():
             recipe_key = (recipe.title.lower(), ",".join(recipe.ingredient_list()))
             if recipe_key in seen_recipes:
                 continue
 
-            if required_recipe_ingredients(recipe).issubset(user_ingredient_set):
+            recipe_required = required_recipe_ingredients(recipe)
+            if not recipe_required:
+                continue
+            if recipe_required.issubset(user_ingredient_set):
                 matches.append(recipe)
                 seen_recipes.add(recipe_key)
 

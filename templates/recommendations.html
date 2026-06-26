@@ -29,6 +29,35 @@
     <div class="stat-chip">{{ strict_pagination.total }} {{ "result" if strict_pagination.total == 1 else "results" }}</div>
   </div>
 
+  <form method="GET" class="filter-grid strict-filter-grid">
+    <input type="hidden" name="ingredients" value="{{ ingredients_text }}" />
+
+    <div>
+      <label class="field-label" for="diet">Diet</label>
+      <select id="diet" name="diet" class="form-select">
+        <option value="">All diets</option>
+        {% for diet in filter_options.diets %}
+        <option value="{{ diet }}" {% if filters.diet == diet %}selected{% endif %}>{{ diet.replace('_', ' ')|title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="field-label" for="difficulty">Difficulty</label>
+      <select id="difficulty" name="difficulty" class="form-select">
+        <option value="">All levels</option>
+        {% for difficulty in filter_options.difficulties %}
+        <option value="{{ difficulty }}" {% if filters.difficulty == difficulty %}selected{% endif %}>{{ difficulty|title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filter-actions">
+      <button type="submit" class="btn btn-neon-primary">Apply Filters</button>
+      <a href="{{ url_for('recommendations', ingredients=ingredients_text) }}" class="btn btn-neon-secondary">Reset</a>
+    </div>
+  </form>
+
   {% if strict_pagination.items %}
   <div class="recipe-grid">
     {% for recipe in strict_pagination.items %}
