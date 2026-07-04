@@ -268,9 +268,13 @@ def sort_similar_matches(matches, sort_key):
 
     if sort_key == "title_desc":
         matches.sort(
-            key=lambda item: (item["recipe"].title.lower(), -item["relevance_score"], item["missing_count"]),
-            reverse=True,
+            key=lambda item: (
+                -item["relevance_score"],
+                item["missing_count"],
+                item["recipe"].title.lower(),
+            )
         )
+        matches.sort(key=lambda item: item["recipe"].title.lower(), reverse=True)
         return
 
     if sort_key == "time_asc":

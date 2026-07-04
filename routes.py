@@ -112,18 +112,18 @@ def validate_search_request(source):
     ingredients_input = get_validated_ingredients(source)
     if ingredients_input is None:
         flash(INVALID_INGREDIENT_INPUT_MESSAGE, "warning")
-        return None, []
+        return None
 
     if not ingredients_input:
         flash("Enter at least one ingredient to see recommendations.", "warning")
-        return None, []
+        return None
 
     normalized_ingredients = clean_ingredients(ingredients_input)
     if not normalized_ingredients:
         flash("Please enter at least one valid ingredient to get suggestions.", "warning")
-        return None, []
+        return None
 
-    return ingredients_input, normalized_ingredients
+    return ingredients_input
 
 
 def get_pagination_args():
@@ -277,7 +277,7 @@ def register_routes(app):
 
     @app.route("/recommendations", methods=["GET"])
     def recommendations():
-        ingredients_input, normalized_ingredients = validate_search_request(request.args)
+        ingredients_input = validate_search_request(request.args)
         if ingredients_input is None:
             return redirect(url_for("dashboard"))
 
@@ -306,7 +306,7 @@ def register_routes(app):
 
     @app.route("/similar", methods=["GET"])
     def similar_recipes_page():
-        ingredients_input, normalized_ingredients = validate_search_request(request.args)
+        ingredients_input = validate_search_request(request.args)
         if ingredients_input is None:
             return redirect(url_for("dashboard"))
 

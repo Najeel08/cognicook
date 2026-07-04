@@ -16,7 +16,7 @@ from models.favorite import Favorite
 from models.recipe import Recipe
 from models.user import User
 from services.data_loader import bootstrap_recipe_data, load_dataset_rows, normalize_instructions, normalize_row, replace_recipe_rows
-from services.recipe_service import get_similar_recommendations, get_strict_recommendations, parse_ingredient_query
+from services.recipe_service import get_similar_recommendations, get_strict_recommendations, parse_ingredient_query, sort_similar_matches
 from utils.ingredient_cleaner import clean_ingredients
 from utils.ingredient_measurements import parse_ingredient_measurements
 from utils.instructions import split_instruction_block
@@ -905,6 +905,20 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Tomato Rice", text)
         self.assertIn("Masala Omelette", text)
         self.assertLess(text.index("Tomato Rice"), text.index("Masala Omelette"))
+
+    def test_similar_title_desc_keeps_relevance_tiebreaker_for_same_title(self):
+        matches = [
+            {"recipe": Recipe(title="Shared Dish"), "relevance_score": 5, "missing_count": 2},
+            {"recipe": Recipe(title="Shared Dish"), "relevance_score": 10, "missing_count": 1},
+            {"recipe": Recipe(title="Alpha Dish"), "relevance_score": 100, "missing_count": 1},
+        ]
+
+        sort_similar_matches(matches, "title_desc")
+
+        self.assertEqual(
+            [(item["recipe"].title, item["relevance_score"]) for item in matches],
+            [("Shared Dish", 10), ("Shared Dish", 5), ("Alpha Dish", 100)],
+        )
 
     def test_favorite_requires_post_and_toggles_saved_state(self):
         self.register_user()
