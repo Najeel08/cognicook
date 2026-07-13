@@ -9,16 +9,6 @@
       <span class="meta-badge">{{ recipe.difficulty|default('standard', true)|title }}</span>
       <span class="meta-badge">{{ recipe.cooking_time or 0 }} min</span>
     </div>
-
-    <div class="detail-section">
-      <h2>Ingredients</h2>
-      <div class="ingredient-chip-group">
-        {% for ing in recipe.ingredient_list() %}
-        <span class="ingredient-chip">{{ ing }}</span>
-        {% endfor %}
-      </div>
-    </div>
-
     <div class="detail-section">
       <h2>Cooking Instructions</h2>
       {% set steps = recipe.instruction_steps() %}

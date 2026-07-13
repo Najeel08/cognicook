@@ -1,26 +1,33 @@
 # CogniCook
 
-CogniCook is a Flask-based recipe recommendation system that finds recipes from ingredients a user already has. It supports exact ingredient matching, TF-IDF and cosine-similarity recommendations, dietary and difficulty filters, authentication, and favorites.
+CogniCook is a Flask recipe recommendation web app that finds recipes from ingredients a user already has. It supports exact ingredient matches, similarity-based recommendations, filters, user accounts, and saved favorites.
 
-## Technology
+## Features
 
-- Python and Flask
+- Search recipes by available ingredients
+- View exact matches and similar recipe suggestions
+- Filter recipes by diet type and difficulty
+- Register, log in, and manage saved favorites
+- View recipe details with ingredients, measurements, and cooking instructions
+
+## Tech Stack
+
+- Python, Flask, Flask-Login
 - SQLAlchemy with SQLite
-- scikit-learn TF-IDF and cosine similarity
-- HTML, Bootstrap CSS, and JavaScript
+- pandas, scikit-learn, TF-IDF, cosine similarity
+- HTML, CSS, JavaScript
 - Python `unittest`
 
 ## Project Structure
 
-- `app.py` - application factory, security middleware, error handlers, and startup
-- `routes.py` - web routes and user workflows
-- `models/` - SQLAlchemy models
-- `services/` - recommendation and dataset services
-- `utils/` - validation, ingredient normalization, instruction parsing, and pagination
-- `templates/` and `static/` - frontend
-- `dataset/recipes.csv` - canonical runtime dataset
-- `dataset/raw_recipes.csv` - raw source dataset used by the cleaning script
-- `scripts/` - dataset cleaning and import utilities
+- `app.py` - application setup, security middleware, error handlers, and database initialization
+- `routes.py` - page routes and user workflows
+- `models/` - database models
+- `services/` - recipe data loading and recommendation logic
+- `utils/` - validation, ingredient normalization, instruction parsing, and pagination helpers
+- `templates/` and `static/` - frontend templates, styles, and scripts
+- `dataset/recipes.csv` - runtime recipe dataset
+- `scripts/` - dataset cleaning and import scripts
 - `tests/` - automated tests and fixtures
 
 ## Local Setup
@@ -28,13 +35,14 @@ CogniCook is a Flask-based recipe recommendation system that finds recipes from 
 ```powershell
 py -3.13 -m venv venv
 .\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python app.py
 ```
 
-Open `http://127.0.0.1:5000`.
+Open `http://127.0.0.1:5000` in the browser.
 
-The application works without a local `.env` file. For custom configuration, set the variables documented in `.env.example` in the shell, IDE launch configuration, or deployment platform.
+A local `.env` file is optional. For custom configuration, use the variables shown in `.env.example`.
 
 ## Tests
 
@@ -44,30 +52,18 @@ python -m unittest discover -s tests -p test_*.py
 
 ## Dataset Maintenance
 
-Regenerate the canonical dataset from the raw source:
+Regenerate `dataset/recipes.csv` from the raw dataset:
 
 ```powershell
 python scripts/clean_dataset.py
 ```
 
-Import the canonical dataset while preserving matching favorites:
+Import the dataset into the local database:
 
 ```powershell
 python scripts/import_dataset.py
 ```
 
-## Runtime Files
+## GitHub Notes
 
-The following are intentionally excluded from version control:
-
-- `.env` and other local environment files
-- `instance/` databases, WAL files, and development secrets
-- `venv/` and `.venv/`
-- `__pycache__/` and test or coverage caches
-- log files
-
-Do not include these generated or machine-specific files in a submission archive or deployment artifact.
-
-## Production Notes
-
-Set `COGNICOOK_ENV=production`, provide a strong `SECRET_KEY`, configure explicit `COGNICOOK_TRUSTED_HOSTS`, use HTTPS, and run the application with a production WSGI server rather than Flask's development server.
+Do not commit generated or machine-specific files such as `.env`, `instance/`, `venv/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, coverage output, logs, or local database files.

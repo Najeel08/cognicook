@@ -51,6 +51,12 @@ class CogniCookAppTests(unittest.TestCase):
 
         cls.app = create_app(TestConfig)
 
+    @classmethod
+    def tearDownClass(cls):
+        with cls.app.app_context():
+            db.session.remove()
+            db.engine.dispose()
+
     def setUp(self):
         self.client = self.app.test_client()
         with self.app.app_context():
@@ -110,6 +116,10 @@ class CogniCookAppTests(unittest.TestCase):
                 ]
             )
             db.session.commit()
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
 
     def get_csrf_token(self, path="/login"):
         self.client.get(path)
@@ -1586,9 +1596,14 @@ class CogniCookAppTests(unittest.TestCase):
             create_app(WildcardHostsConfig)
 
         production_app = create_app(ProductionConfig)
-        response = production_app.test_client().get("/", headers={"Host": "cognicook.example"})
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.headers.get("Location"), "/dashboard")
+        try:
+            response = production_app.test_client().get("/", headers={"Host": "cognicook.example"})
+            self.assertEqual(response.status_code, 302)
+            self.assertEqual(response.headers.get("Location"), "/dashboard")
+        finally:
+            with production_app.app_context():
+                db.session.remove()
+                db.engine.dispose()
 
 
 if __name__ == "__main__":

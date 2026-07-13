@@ -14,13 +14,6 @@
     <p class="lead-copy">
       Enter the ingredients you already have to discover recipes you can cook right away, then explore similar dishes that need only a few extras.
     </p>
-
-    <div class="feature-pills hero-pills" aria-label="Product highlights">
-      <span>Ingredient-based search</span>
-      <span>Fast recipe matching</span>
-      <span>Save favorites</span>
-    </div>
-
     {% if not current_user.is_authenticated %}
     <div class="button-row page-actions hero-actions">
       <a href="{{ url_for('register') }}" class="btn btn-neon-primary">
@@ -29,10 +22,6 @@
       <a href="{{ url_for('login') }}" class="btn btn-neon-secondary">
         Log in to Save Favorites
       </a>
-    </div>
-    {% else %}
-    <div class="button-row page-actions hero-actions">
-      <span class="stat-chip">Ready to discover recipes</span>
     </div>
     {% endif %}
   </div>
