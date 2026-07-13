@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     initializeThemeToggle();
+    initializePasswordToggles();
     initializeRegisterValidation();
 });
 
@@ -82,6 +83,23 @@ function initializeThemeToggle() {
     }
 }
 
+function initializePasswordToggles() {
+    document.querySelectorAll("[data-password-toggle]").forEach((button) => {
+        const inputId = button.getAttribute("aria-controls");
+        const input = inputId ? document.getElementById(inputId) : null;
+        if (!input) {
+            return;
+        }
+
+        button.addEventListener("click", () => {
+            const shouldShow = input.type === "password";
+            input.type = shouldShow ? "text" : "password";
+            button.setAttribute("aria-pressed", String(shouldShow));
+            button.setAttribute("aria-label", shouldShow ? "Hide password" : "Show password");
+        });
+    });
+}
+
 function initializeRegisterValidation() {
     const registerForm = document.querySelector("#register-form");
     const validationBox = document.querySelector("#register-validation");
@@ -136,7 +154,8 @@ function initializeRegisterValidation() {
     function isValidEmail(email) {
         const value = email.trim();
         const localPart = value.split("@", 1)[0];
-        const domain = value.split("@").at(-1).toLowerCase();
+        const domainParts = value.split("@");
+        const domain = domainParts[domainParts.length - 1].toLowerCase();
         const knownDomainTypos = new Set(["gmail.co"]);
         const emailPattern = /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$/;
         return (

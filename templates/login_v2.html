@@ -42,18 +42,19 @@
              name="csrf_token"
              value="{{ csrf_token() }}" />
 
-      <label class="field-label" for="email">
-        Email address
+      <label class="field-label" for="login-username">
+        Username
       </label>
 
       <input
-        id="email"
-        type="email"
-        name="email"
+        id="login-username"
+        type="text"
+        name="username"
         class="form-control"
-        placeholder="you@example.com"
-        autocomplete="email"
-        maxlength="254"
+        placeholder="Enter your username"
+        autocomplete="username"
+        minlength="3"
+        maxlength="30"
         required
       />
 
@@ -61,16 +62,27 @@
         Password
       </label>
 
-      <input
-        id="password"
-        type="password"
-        name="password"
-        class="form-control"
-        placeholder="Enter your password"
-        autocomplete="current-password"
-        maxlength="256"
-        required
-      />
+      <div class="password-field">
+        <input
+          id="password"
+          type="password"
+          name="password"
+          class="form-control"
+          placeholder="Enter your password"
+          autocomplete="current-password"
+          maxlength="256"
+          required
+        />
+        <button
+          type="button"
+          class="password-toggle"
+          data-password-toggle
+          aria-controls="password"
+          aria-label="Show password"
+          aria-pressed="false">
+          <span class="password-toggle-icon" aria-hidden="true"></span>
+        </button>
+      </div>
 
       <button
         type="submit"

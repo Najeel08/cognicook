@@ -47,6 +47,7 @@ class CogniCookAppTests(unittest.TestCase):
             AUTH_ACCOUNT_LOCKOUT_WINDOW_SECONDS = 15 * 60
             AUTH_ACCOUNT_LOCKOUT_MAX_ATTEMPTS = 5
             AUTO_BOOTSTRAP_DATA = False
+            TRUSTED_HOSTS = None
 
         cls.app = create_app(TestConfig)
 
@@ -129,11 +130,11 @@ class CogniCookAppTests(unittest.TestCase):
             follow_redirects=True,
         )
 
-    def login_user(self, email="tester@example.com", password="SecurePass8"):
+    def login_user(self, username="tester_user", password="SecurePass8"):
         token = self.get_csrf_token("/login")
         return self.client.post(
             "/login",
-            data={"email": email, "password": password, "csrf_token": token},
+            data={"username": username, "password": password, "csrf_token": token},
             follow_redirects=True,
         )
 
@@ -252,7 +253,10 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("<h2>Login</h2>", registration_text)
         self.assertNotIn("Welcome Back", registration_text)
 
-        response = self.login_user(email="user@example.com")
+        response = self.login_user(username="tester@example.com")
+        self.assertIn("Invalid username or password.", response.get_data(as_text=True))
+
+        response = self.login_user()
         text = response.get_data(as_text=True)
         self.assertEqual(response.status_code, 200)
         self.assertIn("Welcome, tester_user", text)
@@ -270,7 +274,7 @@ class CogniCookAppTests(unittest.TestCase):
 
         response = self.client.post(
             "/login",
-            data={"email": "tester@example.com", "password": "SecurePass8", "csrf_token": original_token},
+            data={"username": "tester_user", "password": "SecurePass8", "csrf_token": original_token},
             follow_redirects=False,
         )
 
@@ -294,11 +298,15 @@ class CogniCookAppTests(unittest.TestCase):
 
     def test_dashboard_only_shows_ingredient_input_before_search(self):
         self.register_user()
+        response = self.login_user(username="tester@example.com")
+        self.assertIn("Invalid username or password.", response.get_data(as_text=True))
+
         response = self.login_user()
         text = response.get_data(as_text=True)
 
         self.assertIn("Welcome, tester_user", text)
         self.assertIn("Available ingredients", text)
+        self.assertIn("Example: bread, egg, milk, cardamom powder, butter, vanilla extract", text)
         self.assertIn("Search Recipes", text)
         self.assertNotIn("Recipe Explorer", text)
         self.assertNotIn("Simple Curry", text)
@@ -389,6 +397,19 @@ class CogniCookAppTests(unittest.TestCase):
         canonical_rows = load_dataset_rows(BASE_DIR / "dataset" / "recipes.csv")
 
         self.assertEqual(raw_rows, canonical_rows)
+        self.assertEqual(len(canonical_rows), 330)
+
+        for row in canonical_rows:
+            ingredients = [ingredient for ingredient in row["ingredients"].split(",") if ingredient]
+            measurements = parse_ingredient_measurements(
+                row["ingredient_measurements"],
+                known_ingredients=row["ingredients"],
+            )
+            self.assertEqual(
+                len(measurements),
+                len(ingredients),
+                f"{row['title']} should include one measurement per ingredient",
+            )
 
     def test_data_loader_preserves_multiline_instruction_boundaries(self):
         self.assertEqual(
@@ -501,6 +522,9 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn('class="brandmark" href="/dashboard"', login_text)
         self.assertIn('href="/dashboard" class="btn btn-neon-secondary"', login_text)
         self.assertIn('href="/login" class="btn btn-neon-secondary"', login_text)
+        self.assertIn('name="username"', login_text)
+        self.assertIn('data-password-toggle', login_text)
+        self.assertIn('aria-label="Show password"', login_text)
         self.assertIn('aria-label="Primary navigation"', login_text)
         self.assertNotIn("bootstrap.bundle.min.js", login_text)
         self.assertNotIn("welcome back", login_text.lower())
@@ -510,6 +534,7 @@ class CogniCookAppTests(unittest.TestCase):
         register_text = register_response.get_data(as_text=True)
         self.assertIn("Create your account", register_text)
         self.assertIn('action="/register"', register_text)
+        self.assertEqual(register_text.count('data-password-toggle'), 2)
 
     def test_recommendations_page_shows_only_strict_results_and_similar_button(self):
         self.register_user()
@@ -703,10 +728,32 @@ class CogniCookAppTests(unittest.TestCase):
                 page=1,
                 per_page=10,
             )
-            percents = [item["relevance_percent"] for item in results["similar"].items]
+            items = results["similar"].items
+            scores = [item["relevance_score"] for item in items]
 
-        self.assertGreaterEqual(len(percents), 2)
-        self.assertEqual(percents, sorted(percents, reverse=True))
+        self.assertGreaterEqual(len(scores), 2)
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+    def test_similar_relevance_orders_target_query_by_matches_then_raw_score(self):
+        with self.app.app_context():
+            replace_recipe_rows(load_dataset_rows(BASE_DIR / "dataset" / "recipes.csv"), preserve_favorites=False)
+            results = get_similar_recommendations(
+                "onion, tomato, chicken, fish, rice, egg, maida",
+                {"diet": "", "difficulty": "", "sort": "relevance"},
+                page=1,
+                per_page=30,
+            )
+            items = results["similar"].items
+
+        self.assertGreaterEqual(len(items), 10)
+        match_counts = [item["match_count"] for item in items]
+        relevance_scores = [item["relevance_score"] for item in items]
+        self.assertEqual(match_counts, sorted(match_counts, reverse=True))
+        self.assertEqual(relevance_scores, sorted(relevance_scores, reverse=True))
+        for previous, current in zip(items, items[1:]):
+            if previous["match_count"] == current["match_count"]:
+                self.assertGreaterEqual(previous["relevance_value"], current["relevance_value"])
+                self.assertGreaterEqual(previous["relevance_percent"], current["relevance_percent"])
 
     def test_recipe_discovery_is_available_before_login_but_save_requires_login(self):
         response = self.client.get("/recommendations?ingredients=onion,tomato,potato")
@@ -1057,7 +1104,7 @@ class CogniCookAppTests(unittest.TestCase):
             response = self.client.post(
                 "/login",
                 data={
-                    "email": "tester@example.com",
+                    "username": "tester_user",
                     "password": "wrong-password",
                     "csrf_token": self.get_csrf_token("/login"),
                 },
@@ -1068,7 +1115,7 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.client.post(
             "/login",
             data={
-                "email": "tester@example.com",
+                "username": "tester_user",
                 "password": "wrong-password",
                 "csrf_token": self.get_csrf_token("/login"),
             },
@@ -1085,7 +1132,7 @@ class CogniCookAppTests(unittest.TestCase):
             response = self.client.post(
                 "/login",
                 data={
-                    "email": "tester@example.com",
+                    "username": "tester_user",
                     "password": "wrong-password",
                     "csrf_token": self.get_csrf_token("/login"),
                 },
@@ -1097,7 +1144,7 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.client.post(
             "/login",
             data={
-                "email": "tester@example.com",
+                "username": "tester_user",
                 "password": "SecurePass8",
                 "csrf_token": self.get_csrf_token("/login"),
             },
@@ -1115,7 +1162,7 @@ class CogniCookAppTests(unittest.TestCase):
             response = self.client.post(
                 "/login",
                 data={
-                    "email": "tester@example.com",
+                    "username": "tester_user",
                     "password": "wrong-password",
                     "csrf_token": self.get_csrf_token("/login"),
                 },
@@ -1127,7 +1174,7 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.client.post(
             "/login",
             data={
-                "email": "tester@example.com",
+                "username": "tester_user",
                 "password": "wrong-password",
                 "csrf_token": self.get_csrf_token("/login"),
             },
@@ -1268,10 +1315,7 @@ class CogniCookAppTests(unittest.TestCase):
             self.assertEqual(response.status_code, 302)
             self.assertEqual(response.headers.get("Location"), "/dashboard")
         finally:
-            if original_trusted_hosts is None:
-                self.app.config.pop("TRUSTED_HOSTS", None)
-            else:
-                self.app.config["TRUSTED_HOSTS"] = original_trusted_hosts
+            self.app.config["TRUSTED_HOSTS"] = original_trusted_hosts
 
     def test_error_pages_return_visitors_to_public_dashboard(self):
         response = self.client.get("/missing-page")
@@ -1342,6 +1386,52 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Simple Curry", text)
         self.assertIn("Log in to Save", text)
+        self.assertIn("Back", text)
+        self.assertNotIn("Back to Dashboard", text)
+        self.assertNotIn("Open Favorites", text)
+
+    def test_updated_recipe_details_render_expected_content(self):
+        expected = {
+            "french toast": {
+                "ingredients": ["bread", "egg", "milk", "sugar", "cardamom powder", "vanilla extract", "butter", "salt"],
+                "measurements": ["4 number", "2 number", "1/2 cup", "2 tbsp", "1/2 tsp", "1/2 tsp", "2 tbsp", "1/4 tsp"],
+                "steps": ["Beat 2 eggs", "Add the remaining 1 tbsp butter", "Rest for 1 minute"],
+            },
+            "ragi kanji": {
+                "ingredients": ["ragi flour", "water", "milk", "jaggery", "cardamom"],
+                "measurements": ["1/2 cup", "2 cup", "1 cup", "1/4 cup", "1/4 tsp (powder)"],
+                "steps": ["Mix the ragi flour", "strained jaggery syrup", "serve warm"],
+            },
+            "cabbage thoran": {
+                "ingredients": ["cabbage", "coconut", "green chilli", "onion", "curry leaves", "mustard seeds", "coconut oil", "turmeric powder", "salt"],
+                "measurements": ["4 cup", "1 cup", "2 number", "1 cup", "8-10 leaves", "1 tsp", "3 tbsp", "1/2 tsp", "1 tsp"],
+                "steps": ["Wash the cabbage", "mustard seeds", "freshly grated coconut"],
+            },
+            "bread omelette": {
+                "ingredients": ["bread", "egg", "onion", "tomato", "green chilli", "coriander leaves", "butter", "salt", "black pepper"],
+                "measurements": ["4 number", "3 number", "1/2 cup", "1/4 cup", "2 number", "1/4 cup", "2 tbsp", "3/4 tsp", "1/2 tsp"],
+                "steps": ["Crack 3 eggs", "place 2 bread slices", "Rest for 1 minute"],
+            },
+        }
+
+        with self.app.app_context():
+            replace_recipe_rows(load_dataset_rows(BASE_DIR / "dataset" / "recipes.csv"), preserve_favorites=False)
+            recipe_ids = {
+                recipe.title: recipe.id
+                for recipe in Recipe.query.filter(db.func.lower(Recipe.title).in_(expected)).all()
+            }
+
+        self.assertEqual(set(recipe_ids), set(expected))
+        for title, detail in expected.items():
+            response = self.client.get(f"/recipe/{recipe_ids[title]}")
+            text = response.get_data(as_text=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(title, text)
+            self.assertIn("Easy", text)
+            self.assertIn("20 min", text)
+            self.assertEqual(text.count('class="instruction-step"'), 6)
+            for value in detail["ingredients"] + detail["measurements"] + detail["steps"]:
+                self.assertIn(value, text)
 
     def test_recipe_detail_back_link_uses_safe_return_target(self):
         response = self.client.get(

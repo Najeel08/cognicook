@@ -301,8 +301,8 @@ def sort_similar_matches(matches, sort_key):
 
     matches.sort(
         key=lambda item: (
-            -item["relevance_score"],
             -item["match_count"],
+            -item.get("relevance_value", item["relevance_score"]),
             -item["match_ratio"],
             item["missing_count"],
             -item["score"],
@@ -311,7 +311,7 @@ def sort_similar_matches(matches, sort_key):
     )
 
 
-def relevance_percent(match_ratio, query_coverage, similarity_score, missing_count, max_missing, title_score=0.0):
+def relevance_value(match_ratio, query_coverage, similarity_score, missing_count, max_missing, title_score=0.0):
     missing_penalty = (missing_count / max_missing) * 0.10 if max_missing else 0
     weighted_score = (
         (match_ratio * 0.35)
@@ -320,7 +320,11 @@ def relevance_percent(match_ratio, query_coverage, similarity_score, missing_cou
         + (title_score * 0.15)
         - missing_penalty
     )
-    return round(max(0, min(1, weighted_score)) * 100)
+    return max(0, min(1, weighted_score)) * 100
+
+
+def relevance_percent(match_ratio, query_coverage, similarity_score, missing_count, max_missing, title_score=0.0):
+    return round(relevance_value(match_ratio, query_coverage, similarity_score, missing_count, max_missing, title_score))
 
 
 def get_strict_recommendations(ingredients_text, page, per_page, diet="", difficulty=""):
@@ -414,17 +418,15 @@ def get_similar_recommendations(ingredients_text, filters, page, per_page, max_m
         if not is_strong_match and not is_fallback_match:
             continue
 
-        missing_penalty = missing_count * 25
-        relevance_score = round(
-            (match_count * 120)
-            + (query_coverage * 100)
-            + (match_ratio * 80)
-            + (similarity_score * 80)
-            + (title_score * 220)
-            + (350 if has_exact_title else 0)
-            - missing_penalty,
-            6,
+        relevance_display_value = relevance_value(
+            match_ratio,
+            query_coverage,
+            similarity_score,
+            missing_count,
+            max_missing,
+            title_score,
         )
+        relevance_score = round((match_count * 1000) + relevance_display_value, 6)
 
         candidates.append(
             {
@@ -438,14 +440,8 @@ def get_similar_recommendations(ingredients_text, filters, page, per_page, max_m
                 "missing_count": missing_count,
                 "required_count": required_count,
                 "relevance_score": relevance_score,
-                "relevance_percent": relevance_percent(
-                    match_ratio,
-                    query_coverage,
-                    similarity_score,
-                    missing_count,
-                    max_missing,
-                    title_score,
-                ),
+                "relevance_value": round(relevance_display_value, 6),
+                "relevance_percent": round(relevance_display_value),
                 "is_fallback_match": not is_strong_match,
             }
         )

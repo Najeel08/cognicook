@@ -148,33 +148,34 @@ def register_routes(app):
 
         if request.method == "POST":
             security_tools = current_app.extensions["security_tools"]
-            email = (request.form.get("email") or "").strip().lower()
+            username = " ".join((request.form.get("username") or "").strip().split())
             password = request.form.get("password") or ""
+            rate_limit_key = username.casefold()
 
-            if security_tools["is_auth_rate_limited"](email):
+            if security_tools["is_auth_rate_limited"](rate_limit_key):
                 flash("Too many login attempts. Please wait a minute and try again.", "danger")
                 abort(429, description="Too many login attempts. Please wait a minute and try again.")
 
             if (
-                not is_safe_input(email, max_length=254, allow_path_separators=False)
-                or not is_valid_email(email)
+                not is_safe_input(username, max_length=30, allow_path_separators=False)
+                or not is_valid_username(username)
             ):
-                security_tools["record_auth_failure"](email)
-                flash("Invalid email or password.", "danger")
+                security_tools["record_auth_failure"](rate_limit_key)
+                flash("Invalid username or password.", "danger")
                 return render_template("login_v2.html", title="Login")
 
             if len(password) > MAX_PASSWORD_INPUT_LENGTH:
-                flash("Invalid email or password.", "danger")
+                flash("Invalid username or password.", "danger")
                 return render_template("login_v2.html", title="Login")
 
-            user = User.query.filter_by(email=email).first()
+            user = User.query.filter(db.func.lower(User.name) == username.casefold()).first()
             password_matches = (
                 user.check_password(password)
                 if user
                 else check_password_hash(DUMMY_PASSWORD_HASH, password)
             )
             if user and password_matches:
-                security_tools["clear_auth_failures"](email)
+                security_tools["clear_auth_failures"](rate_limit_key)
                 session.clear()
                 login_user(user)
                 session.permanent = True
@@ -182,8 +183,8 @@ def register_routes(app):
                 flash(f"Welcome, {user.username}", "success")
                 return redirect(url_for("dashboard"))
 
-            security_tools["record_auth_failure"](email)
-            flash("Invalid email or password.", "danger")
+            security_tools["record_auth_failure"](rate_limit_key)
+            flash("Invalid username or password.", "danger")
 
         return render_template("login_v2.html", title="Login")
 

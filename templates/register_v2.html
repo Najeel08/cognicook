@@ -82,33 +82,55 @@
         Password
       </label>
 
-      <input
-        id="password"
-        type="password"
-        name="password"
-        class="form-control"
-        placeholder="At least 8 characters"
-        autocomplete="new-password"
-        minlength="8"
-        maxlength="256"
-        required
-      />
+      <div class="password-field">
+        <input
+          id="password"
+          type="password"
+          name="password"
+          class="form-control"
+          placeholder="At least 8 characters"
+          autocomplete="new-password"
+          minlength="8"
+          maxlength="256"
+          required
+        />
+        <button
+          type="button"
+          class="password-toggle"
+          data-password-toggle
+          aria-controls="password"
+          aria-label="Show password"
+          aria-pressed="false">
+          <span class="password-toggle-icon" aria-hidden="true"></span>
+        </button>
+      </div>
 
       <label class="field-label" for="confirm_password">
         Confirm password
       </label>
 
-      <input
-        id="confirm_password"
-        type="password"
-        name="confirm_password"
-        class="form-control"
-        placeholder="Retype your password"
-        autocomplete="new-password"
-        minlength="8"
-        maxlength="256"
-        required
-      />
+      <div class="password-field">
+        <input
+          id="confirm_password"
+          type="password"
+          name="confirm_password"
+          class="form-control"
+          placeholder="Retype your password"
+          autocomplete="new-password"
+          minlength="8"
+          maxlength="256"
+          required
+        />
+        <button
+          type="button"
+          class="password-toggle"
+          data-password-toggle
+          aria-controls="confirm_password"
+          aria-label="Show password"
+          aria-pressed="false">
+          <span class="password-toggle-icon" aria-hidden="true"></span>
+        </button>
+      </div>
 
       <div
         id="register-validation"
