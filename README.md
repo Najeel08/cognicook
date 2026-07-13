@@ -64,6 +64,3 @@ Import the dataset into the local database:
 python scripts/import_dataset.py
 ```
 
-## GitHub Notes
-
-Do not commit generated or machine-specific files such as `.env`, `instance/`, `venv/`, `.venv/`, `__pycache__/`, `.pytest_cache/`, coverage output, logs, or local database files.

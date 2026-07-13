@@ -26,9 +26,3 @@ htmlcov/
 
 *.log
 
-.mimocode/
-proposal_pages/*.pdf
-proposal_pages/*.txt
-proposal_pages/*.py
-
-proposal_pages/
