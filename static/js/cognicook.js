@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", () => {
     const buttons = document.querySelectorAll(".btn-neon-primary, .btn-neon-secondary, .btn-danger-soft");
 
@@ -20,6 +19,7 @@ function initializeThemeToggle() {
     const storageKey = "cognicook-theme";
     const allowedThemes = new Set(["dark", "light"]);
     const root = document.documentElement;
+    let themeSwitchTimeout = 0;
 
     function currentTheme() {
         return allowedThemes.has(root.dataset.theme) ? root.dataset.theme : "dark";
@@ -33,6 +33,14 @@ function initializeThemeToggle() {
         }
     }
 
+    function markThemeSwitching() {
+        root.classList.add("theme-switching");
+        window.clearTimeout(themeSwitchTimeout);
+        themeSwitchTimeout = window.setTimeout(() => {
+            root.classList.remove("theme-switching");
+        }, 280);
+    }
+
     function updateToggleState(theme) {
         const isLight = theme === "light";
         toggle.setAttribute("aria-pressed", String(isLight));
@@ -43,6 +51,10 @@ function initializeThemeToggle() {
     function applyTheme(theme, shouldPersist = true) {
         if (!allowedThemes.has(theme)) {
             return;
+        }
+
+        if (currentTheme() !== theme) {
+            markThemeSwitching();
         }
 
         root.dataset.theme = theme;
@@ -102,15 +114,25 @@ function initializePasswordToggles() {
 
 function initializeRegisterValidation() {
     const registerForm = document.querySelector("#register-form");
-    const validationBox = document.querySelector("#register-validation");
-    if (!registerForm || !validationBox) {
+    if (!registerForm) {
         return;
     }
 
-    const usernameInput = registerForm.querySelector("#username");
-    const emailInput = registerForm.querySelector("#email");
-    const passwordInput = registerForm.querySelector("#password");
-    const confirmPasswordInput = registerForm.querySelector("#confirm_password");
+    const fields = {
+        username: registerForm.querySelector("#username"),
+        email: registerForm.querySelector("#email"),
+        password: registerForm.querySelector("#password"),
+        confirm_password: registerForm.querySelector("#confirm_password"),
+    };
+    const feedback = {
+        username: registerForm.querySelector('[data-validation-for="username"]'),
+        email: registerForm.querySelector('[data-validation-for="email"]'),
+        password: registerForm.querySelector('[data-validation-for="password"]'),
+        confirm_password: registerForm.querySelector('[data-validation-for="confirm_password"]'),
+    };
+    const touched = new Set();
+    let submitted = false;
+
     const commonWeakPasswords = new Set([
         "12345678",
         "123456789",
@@ -126,11 +148,7 @@ function initializeRegisterValidation() {
         "cognicook",
         "cognicook123",
     ]);
-    const keyboardPatterns = [
-        "qwer",
-        "asdf",
-        "zxcv",
-    ];
+    const keyboardPatterns = ["qwer", "asdf", "zxcv"];
     const sequentialSources = ["0123456789", "abcdefghijklmnopqrstuvwxyz"];
 
     function hasSequentialRun(value, runLength = 4) {
@@ -168,70 +186,126 @@ function initializeRegisterValidation() {
         );
     }
 
-    function validateRegisterForm() {
-        const errors = [];
-        const username = (usernameInput?.value || "").trim();
-        const email = (emailInput?.value || "").trim();
-        const password = passwordInput?.value || "";
-        const confirmPassword = confirmPasswordInput?.value || "";
+    function messagesFor(fieldName) {
+        const username = (fields.username?.value || "").trim();
+        const email = (fields.email?.value || "").trim();
+        const password = fields.password?.value || "";
+        const confirmPassword = fields.confirm_password?.value || "";
         const loweredPassword = password.toLowerCase();
 
-        if (!/^[A-Za-z0-9_.-]{3,30}$/.test(username)) {
-            errors.push("Username must be 3 to 30 characters and may contain letters, numbers, dots, hyphens, or underscores.");
-        }
-        if (!isValidEmail(email)) {
-            errors.push("Please enter a valid email address.");
-        }
-        if (password.length < 8) {
-            errors.push("Password must be at least 8 characters long.");
-        }
-        if (!/[A-Z]/.test(password)) {
-            errors.push("Password must include at least one uppercase letter.");
-        }
-        if (!/[a-z]/.test(password)) {
-            errors.push("Password must include at least one lowercase letter.");
-        }
-        if (!/\d/.test(password)) {
-            errors.push("Password must include at least one number.");
-        }
-        if (/(.)\1{3,}/i.test(password)) {
-            errors.push("Password cannot contain simple repeated sequences like 1111 or aaaa.");
-        }
-        if (hasSequentialRun(loweredPassword)) {
-            errors.push("Password cannot contain obvious sequential patterns like 1234 or abcd.");
-        }
-        if (commonWeakPasswords.has(loweredPassword)) {
-            errors.push("Password is too common. Please choose a stronger password.");
-        }
-        if (password !== confirmPassword) {
-            errors.push("Password confirmation does not match.");
+        if (fieldName === "username") {
+            if (!username) {
+                return ["Username is required."];
+            }
+            if (!/^[A-Za-z0-9_.-]{3,30}$/.test(username)) {
+                return ["Use 3 to 30 letters, numbers, dots, hyphens, or underscores."];
+            }
+            return [];
         }
 
-        if (errors.length) {
-            validationBox.replaceChildren();
-            const list = document.createElement("ul");
-            errors.forEach((error) => {
-                const item = document.createElement("li");
-                item.textContent = error;
-                list.appendChild(item);
-            });
-            validationBox.appendChild(list);
-            validationBox.classList.remove("d-none");
-        } else {
-            validationBox.replaceChildren();
-            validationBox.classList.add("d-none");
+        if (fieldName === "email") {
+            if (!email) {
+                return ["Email address is required."];
+            }
+            return isValidEmail(email) ? [] : ["Enter a valid email address."];
         }
 
-        return errors;
+        if (fieldName === "password") {
+            const messages = [];
+            if (password.length < 8) {
+                messages.push("Minimum 8 characters.");
+            }
+            if (!/[A-Z]/.test(password)) {
+                messages.push("Uppercase required.");
+            }
+            if (!/[a-z]/.test(password)) {
+                messages.push("Lowercase required.");
+            }
+            if (!/\d/.test(password)) {
+                messages.push("One number required.");
+            }
+            if (/(.)\1{3,}/i.test(password)) {
+                messages.push("Avoid repeated sequences like 1111 or aaaa.");
+            }
+            if (hasSequentialRun(loweredPassword)) {
+                messages.push("Avoid obvious sequences like 1234 or abcd.");
+            }
+            if (commonWeakPasswords.has(loweredPassword)) {
+                messages.push("Choose a less common password.");
+            }
+            if (password.length > 256) {
+                messages.push("Password is too long.");
+            }
+            return messages;
+        }
+
+        if (fieldName === "confirm_password") {
+            if (!confirmPassword) {
+                return ["Confirm your password."];
+            }
+            return password === confirmPassword ? [] : ["Passwords do not match."];
+        }
+
+        return [];
     }
 
-    registerForm.addEventListener("submit", (event) => {
-        if (validateRegisterForm().length) {
-            event.preventDefault();
+    function renderFeedback(fieldName, messages) {
+        const input = fields[fieldName];
+        const box = feedback[fieldName];
+        if (!input || !box) {
+            return;
         }
+
+        box.replaceChildren();
+        input.setAttribute("aria-invalid", String(messages.length > 0));
+
+        if (!messages.length || (!submitted && !touched.has(fieldName))) {
+            box.classList.remove("is-visible");
+            input.removeAttribute("aria-invalid");
+            return;
+        }
+
+        const list = document.createElement("ul");
+        messages.forEach((message) => {
+            const item = document.createElement("li");
+            item.textContent = message;
+            list.appendChild(item);
+        });
+        box.appendChild(list);
+        box.classList.add("is-visible");
+    }
+
+    function validateField(fieldName) {
+        const messages = messagesFor(fieldName);
+        renderFeedback(fieldName, messages);
+        return messages;
+    }
+
+    function validateForm() {
+        return Object.keys(fields).flatMap((fieldName) => validateField(fieldName));
+    }
+
+    Object.entries(fields).forEach(([fieldName, input]) => {
+        input?.addEventListener("input", () => {
+            touched.add(fieldName);
+            validateField(fieldName);
+
+            if (fieldName === "password" && (touched.has("confirm_password") || submitted)) {
+                validateField("confirm_password");
+            }
+        });
+
+        input?.addEventListener("blur", () => {
+            touched.add(fieldName);
+            validateField(fieldName);
+        });
     });
 
-    [usernameInput, emailInput, passwordInput, confirmPasswordInput].forEach((input) => {
-        input?.addEventListener("input", validateRegisterForm);
+    registerForm.addEventListener("submit", (event) => {
+        submitted = true;
+        Object.keys(fields).forEach((fieldName) => touched.add(fieldName));
+        if (validateForm().length) {
+            event.preventDefault();
+        }
     });
 }

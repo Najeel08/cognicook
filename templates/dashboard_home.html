@@ -3,46 +3,34 @@
 
 <section class="hero-panel glass-panel dashboard-panel dashboard-home">
   <div class="dashboard-hero-copy">
-    {% if current_user.is_authenticated %}
-    <p class="eyebrow">Welcome, {{ current_user.username|default(current_user.name, true) }}</p>
-    {% else %}
+    {% if not current_user.is_authenticated %}
     <p class="eyebrow">Welcome to CogniCook</p>
     {% endif %}
 
-    <h1>Find recipes from the ingredients already in your kitchen.</h1>
+    <h1>Find recipes you can cook <span class="text-accent">today.</span></h1>
 
     <p class="lead-copy">
-      Enter the ingredients you already have to discover recipes you can cook right away, then explore similar dishes that need only a few extras.
+      Add the ingredients you have on hand and CogniCook will surface exact recipes first, then close matches that need only a few extras.
     </p>
-    {% if not current_user.is_authenticated %}
-    <div class="button-row page-actions hero-actions">
-      <a href="{{ url_for('register') }}" class="btn btn-neon-primary">
-        Create Account
-      </a>
-      <a href="{{ url_for('login') }}" class="btn btn-neon-secondary">
-        Log in to Save Favorites
-      </a>
-    </div>
-    {% endif %}
   </div>
 
   <form method="POST" class="ingredient-form search-panel dashboard-search-panel">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
     <div class="search-panel-header">
-      <p class="eyebrow search-eyebrow">Start cooking</p>
-      <h2>Enter the ingredients you already have</h2>
+      <p class="eyebrow search-eyebrow">Recipe search</p>
+      <h2>Start with what you have</h2>
       <p class="search-panel-copy">
-        Use commas to separate ingredients. Basic items like salt, oil, sugar, and water are considered available automatically.
+        Separate ingredients with commas. Everyday staples like salt, oil, sugar, and water are counted automatically.
       </p>
     </div>
 
-    <label class="field-label" for="ingredients">Available ingredients</label>
+    <label class="field-label dashboard-field-label" for="ingredients">Available ingredients</label>
     <textarea
       id="ingredients"
       name="ingredients"
       class="form-control dashboard-ingredients"
-      rows="6"
+      rows="3"
       placeholder="Example: bread, egg, milk, cardamom powder, butter, vanilla extract"
       maxlength="1000"
       required

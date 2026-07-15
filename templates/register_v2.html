@@ -3,7 +3,7 @@
 
 <section class="auth-wrap">
 
-  <div class="auth-copy glass-panel">
+  <div class="auth-copy glass-panel register-copy">
 
     <p class="eyebrow">CREATE ACCOUNT</p>
 
@@ -16,6 +16,12 @@
       smart suggestions, favorites, and secure access
       from any device.
     </p>
+
+    <ul class="auth-benefits" aria-label="Account benefits">
+      <li>Personalized recipe matches from your available ingredients.</li>
+      <li>Saved favorites for dishes you want to revisit.</li>
+      <li>Smarter recommendations as you explore exact and similar recipes.</li>
+    </ul>
   </div>
 
   <div class="auth-card glass-panel">
@@ -54,7 +60,14 @@
         minlength="3"
         maxlength="30"
         required
+        aria-describedby="username-feedback"
       />
+      <div
+        id="username-feedback"
+        class="field-feedback"
+        data-validation-for="username"
+        aria-live="polite">
+      </div>
 
       <label class="field-label" for="email">
         Email address
@@ -69,7 +82,14 @@
         autocomplete="email"
         maxlength="254"
         required
+        aria-describedby="email-feedback"
       />
+      <div
+        id="email-feedback"
+        class="field-feedback"
+        data-validation-for="email"
+        aria-live="polite">
+      </div>
 
       <label class="field-label" for="password">
         Password
@@ -86,6 +106,7 @@
           minlength="8"
           maxlength="256"
           required
+          aria-describedby="password-feedback password-rules"
         />
         <button
           type="button"
@@ -96,6 +117,12 @@
           aria-pressed="false">
           <span class="password-toggle-icon" aria-hidden="true"></span>
         </button>
+      </div>
+      <div
+        id="password-feedback"
+        class="field-feedback"
+        data-validation-for="password"
+        aria-live="polite">
       </div>
 
       <label class="field-label" for="confirm_password">
@@ -113,6 +140,7 @@
           minlength="8"
           maxlength="256"
           required
+          aria-describedby="confirm-password-feedback"
         />
         <button
           type="button"
@@ -124,14 +152,14 @@
           <span class="password-toggle-icon" aria-hidden="true"></span>
         </button>
       </div>
-
       <div
-        id="register-validation"
-        class="validation-card d-none"
+        id="confirm-password-feedback"
+        class="field-feedback"
+        data-validation-for="confirm_password"
         aria-live="polite">
       </div>
 
-      <div class="password-rules">
+      <div class="password-rules" id="password-rules">
         <span>8+ characters</span>
         <span>Uppercase + lowercase</span>
         <span>At least 1 number</span>
