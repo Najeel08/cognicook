@@ -1606,5 +1606,33 @@ class CogniCookAppTests(unittest.TestCase):
                 db.engine.dispose()
 
 
+    def test_static_assets_use_versioned_urls_with_immutable_cache_headers(self):
+        response = self.client.get("/dashboard")
+        body = response.get_data(as_text=True)
+        self.assertRegex(body, r'/static/js/theme-init\.js\?v=[0-9a-f]{12}')
+        self.assertRegex(body, r'/static/css/cognicook\.css\?v=[0-9a-f]{12}')
+        self.assertRegex(body, r'/static/js/cognicook\.js\?v=[0-9a-f]{12}')
+
+    def test_email_uniqueness_is_case_insensitive(self):
+        self.register_user(email="case@example.com")
+        response = self.register_user(username="different_user", email="CASE@example.com")
+        self.assertIn(b"Email address already in use.", response.data)
+
+    def test_malformed_password_hash_is_rejected_without_server_error(self):
+        with self.app.app_context():
+            db.session.add(
+                User(
+                    name="legacy_user",
+                    email="legacy@example.com",
+                    password_hash="invalid-password-hash",
+                )
+            )
+            db.session.commit()
+
+        response = self.login_user(username="legacy_user", password="SecurePass8")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Invalid username or password.", response.data)
+
+
 if __name__ == "__main__":
     unittest.main()

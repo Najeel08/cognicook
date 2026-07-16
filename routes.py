@@ -228,7 +228,7 @@ def register_routes(app):
             if User.query.filter(db.func.lower(User.name) == username.casefold()).first():
                 errors.append("Username not available.")
 
-            if User.query.filter_by(email=email).first():
+            if User.query.filter(db.func.lower(User.email) == email).first():
                 errors.append("Email address already in use. Please log in instead.")
 
             if errors:
@@ -247,7 +247,7 @@ def register_routes(app):
                 security_tools["record_auth_failure"](email)
                 if User.query.filter(db.func.lower(User.name) == username.casefold()).first():
                     flash("Username not available.", "danger")
-                elif User.query.filter_by(email=email).first():
+                elif User.query.filter(db.func.lower(User.email) == email).first():
                     flash("Email address already in use. Please log in instead.", "danger")
                 else:
                     flash("Registration could not be completed. Please try again.", "danger")

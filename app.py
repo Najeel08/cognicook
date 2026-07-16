@@ -1,6 +1,7 @@
 import os
 import secrets
 import sqlite3
+from hashlib import sha256
 from hmac import new as hmac_new
 from pathlib import Path
 from time import time
@@ -178,6 +179,32 @@ def ensure_user_schema(app):
         )
 
 
+def ensure_user_email_schema(app):
+    inspector = inspect(db.engine)
+    if not inspector.has_table("user"):
+        return
+
+    with db.engine.begin() as connection:
+        duplicate = connection.execute(
+            text(
+                "SELECT lower(email) AS normalized_email, COUNT(*) AS total "
+                "FROM user GROUP BY lower(email) HAVING COUNT(*) > 1 LIMIT 1"
+            )
+        ).first()
+        if duplicate:
+            app.logger.warning(
+                "Case-insensitive email uniqueness could not be enforced because duplicate email addresses already exist."
+            )
+            return
+
+        connection.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_user_email_nocase "
+                "ON user (email COLLATE NOCASE)"
+            )
+        )
+
+
 def remove_retired_search_activity_schema():
     if not inspect(db.engine).has_table("search_activity"):
         return
@@ -207,6 +234,30 @@ def create_app(config_object=Config):
     db.init_app(app)
     login_manager.init_app(app)
     login_manager.session_protection = "strong"
+
+    asset_versions = {}
+
+    def static_asset_url(filename):
+        """Return a cache-busted URL for a project-owned static asset."""
+        static_root = Path(app.static_folder).resolve()
+        asset_path = (static_root / str(filename)).resolve()
+        try:
+            asset_path.relative_to(static_root)
+        except ValueError:
+            raise ValueError("Static asset path must remain within the static directory.")
+
+        try:
+            stat = asset_path.stat()
+            fingerprint = (stat.st_mtime_ns, stat.st_size)
+            cached = asset_versions.get(asset_path)
+            if not cached or cached[0] != fingerprint:
+                digest = sha256(asset_path.read_bytes()).hexdigest()[:12]
+                cached = (fingerprint, digest)
+                asset_versions[asset_path] = cached
+        except OSError:
+            return url_for("static", filename=filename)
+
+        return url_for("static", filename=filename, v=cached[1])
 
     @login_manager.unauthorized_handler
     def handle_unauthorized():
@@ -443,6 +494,7 @@ def create_app(config_object=Config):
         return response
 
     app.jinja_env.globals["csrf_token"] = generate_csrf_token
+    app.jinja_env.globals["static_asset_url"] = static_asset_url
     app.jinja_env.globals["query_string"] = query_string
     app.jinja_env.globals["query_string_for"] = query_string_for
     app.extensions["security_tools"] = {
@@ -460,6 +512,7 @@ def create_app(config_object=Config):
 
         db.create_all()
         ensure_user_schema(app)
+        ensure_user_email_schema(app)
         ensure_recipe_schema()
         remove_retired_search_activity_schema()
         if app.config.get("AUTO_BOOTSTRAP_DATA", True):

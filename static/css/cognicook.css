@@ -1154,7 +1154,6 @@ textarea.form-control {
 }
 
 
-/* Refinement pass: compact dashboard, clearer chips, auth artwork, and cleaner recipe cards. */
 .dashboard-panel {
     gap: 0.9rem;
     padding-block: clamp(1.15rem, 2.6vw, 1.8rem);
@@ -1434,7 +1433,6 @@ textarea.form-control {
     }
 }
 
-/* Final UI polish: field-level validation, auth balance, neutral recipe metadata, and fast theme swaps. */
 .auth-copy > * {
     position: relative;
     z-index: 1;
@@ -1599,7 +1597,6 @@ html.theme-switching .recipe-grid {
         transform: translateX(1.66rem);
     }
 }
-/* Dashboard search composition. */
 .dashboard-panel {
     min-height: clamp(26rem, 62vh, 35rem);
     gap: clamp(1rem, 2.4vw, 1.55rem);
@@ -1697,7 +1694,6 @@ html.theme-switching .recipe-grid {
 .auth-copy::before {
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg' fill='none'%3E%3Cg stroke='%23f97316' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M43 84h94v48c0 12-10 22-22 22H65c-12 0-22-10-22-22V84Z' fill='%23f97316' fill-opacity='.10'/%3E%3Cellipse cx='90' cy='84' rx='47' ry='12' fill='%23f97316' fill-opacity='.16'/%3E%3Cpath d='M34 104H16M146 104h18M77 70c0-8 6-14 13-14s13 6 13 14M58 42c-7 11-7 21 0 31M91 34c-8 12-8 23 0 35M124 43c-7 10-7 20 0 29'/%3E%3C/g%3E%3C/svg%3E");
 }
-/* Dashboard reference merge: compact hero, search-card utility controls, and brand polish. */
 .brandmark-icon,
 .dashboard-search-icon,
 .dashboard-clear-btn,
@@ -1917,7 +1913,6 @@ html.theme-switching .recipe-grid {
         width: 100%;
     }
 }
-/* Final spacing pass: dashboard copy, register balance, and clearer theme toggle. */
 .dashboard-search-heading {
     display: grid;
     gap: 0.22rem;
@@ -2111,7 +2106,6 @@ html.theme-switching .recipe-grid {
         display: none;
     }
 }
-/* Register auth refinements: heading hierarchy, four-corner decoration, and visible light-mode sun. */
 .auth-card > h2 {
     margin: 0 0 0.42rem;
     color: var(--accent-orange);
