@@ -48,7 +48,7 @@
         <span class="meta-badge">{{ recipe.diet_type|default('mixed', true)|replace('_', ' ')|title }}</span>
         <span class="meta-badge">{{ recipe.difficulty|default('standard', true)|title }}</span>
       </div>
-      <h2 class="recipe-card-title">{{ recipe.title }}</h2>
+      <h3 class="recipe-card-title">{{ recipe.title }}</h3>
       <p class="recipe-snippet">{{ recipe.ingredients }}</p>
       <div class="recipe-card-footer">
         <span>{{ recipe.cooking_time or 0 }} min</span>

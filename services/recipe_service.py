@@ -9,12 +9,33 @@ from models.recipe import Recipe
 from utils.ingredient_cleaner import clean_ingredients, normalize_search_text
 from utils.pagination import paginate_list
 
-BASIC_INGREDIENTS = {"salt", "oil", "water", "sugar"}
+BASIC_INGREDIENTS = {"salt", "water", "sugar"}
 DIET_OPTIONS = ("veg", "non_veg")
 DIFFICULTY_OPTIONS = ("easy", "medium", "hard")
 SIMILAR_SORT_OPTIONS = ("relevance", "title_asc", "title_desc", "time_asc", "time_desc")
 MIN_SIMILAR_MATCH_COUNT = 2
 MIN_SIMILAR_MATCH_RATIO = 0.5
+INGREDIENT_MATCH_ALIASES = {
+    "salted cod": {"cod"},
+    "seer fish": {"fish"},
+    "anchovy": {"fish"},
+    "black pepper": {"pepper"},
+    "cardamom powder": {"cardamom"},
+    "chocolate chips": {"chocolate"},
+    "chocolate syrup": {"chocolate"},
+    "cocoa powder": {"cocoa"},
+    "coriander leaves": {"coriander"},
+    "coriander powder": {"coriander"},
+    "garlic powder": {"garlic"},
+    "lemon juice": {"lemon"},
+    "mint leaves": {"mint"},
+    "turmeric powder": {"turmeric"},
+    "vanilla essence": {"vanilla"},
+}
+
+GENERIC_HEAD_ALIASES = {
+    "olives": {"olive", "olives"},
+}
 
 _similarity_cache = {
     "vocab_built": False,
@@ -28,7 +49,6 @@ _similarity_cache = {
 }
 
 WORD_PATTERN = re.compile(r"[a-z]+")
-EXACT_TEXT_PATTERN = re.compile(r"[a-z0-9]+")
 TITLE_STOPWORDS = {"recipe", "dish"}
 TITLE_MATCH_THRESHOLD = 0.75
 
@@ -63,11 +83,6 @@ def normalize_query_words(value):
     return WORD_PATTERN.findall(text)
 
 
-def exact_searchable_text(value):
-    text = str(value or "").lower().replace("&", " and ")
-    return " ".join(EXACT_TEXT_PATTERN.findall(text))
-
-
 def get_ingredient_vocabulary():
     if _similarity_cache["vocab_built"]:
         return _similarity_cache["ingredient_vocabulary"], _similarity_cache["max_ingredient_words"]
@@ -79,6 +94,11 @@ def get_ingredient_vocabulary():
         for ingredient in recipe.ingredient_list()
         if ingredient
     }
+    vocabulary.update(
+        alias
+        for ingredient in tuple(vocabulary)
+        for alias in ingredient_match_terms(ingredient)
+    )
     max_words = max((len(ingredient.split()) for ingredient in vocabulary), default=1)
 
     _similarity_cache["ingredient_vocabulary"] = frozenset(vocabulary)
@@ -139,20 +159,69 @@ def parse_ingredient_query(text):
     return cleaned, ", ".join(cleaned)
 
 
+def ingredient_match_terms(ingredient):
+    normalized = normalize_search_text(ingredient).lower()
+    if not normalized:
+        return set()
+
+    terms = {normalized}
+    terms.update(INGREDIENT_MATCH_ALIASES.get(normalized, set()))
+
+    words = normalized.split()
+    if len(words) > 1:
+        terms.update(GENERIC_HEAD_ALIASES.get(words[-1], set()))
+
+    word_set = set(words)
+    if "cod" in word_set:
+        terms.add("cod")
+    if normalized == "fish" or normalized.endswith(" fish"):
+        terms.add("fish")
+
+    return terms
+
+
+def recipe_ingredient_matches_user(ingredient, user_ingredient_set):
+    return bool(ingredient_match_terms(ingredient) & user_ingredient_set)
+
+
+def matched_recipe_ingredients(recipe_ingredients, user_ingredient_set):
+    return sorted(
+        ingredient
+        for ingredient in recipe_ingredients
+        if recipe_ingredient_matches_user(ingredient, user_ingredient_set)
+    )
+
+
+def missing_recipe_ingredients(recipe_ingredients, user_ingredient_set):
+    return sorted(
+        ingredient
+        for ingredient in recipe_ingredients
+        if not recipe_ingredient_matches_user(ingredient, user_ingredient_set)
+    )
+
+
 def ingredient_feature_text(ingredients):
     terms = []
     for ingredient in ingredients:
-        normalized = normalize_search_text(ingredient).lower()
-        if not normalized:
-            continue
-        if " " in normalized:
-            terms.append(normalized.replace(" ", "_"))
-        terms.extend(normalized.split())
+        for normalized in sorted(ingredient_match_terms(ingredient)):
+            if not normalized:
+                continue
+            if " " in normalized:
+                terms.append(normalized.replace(" ", "_"))
+            terms.extend(normalized.split())
     return " ".join(terms)
 
 
 def required_recipe_ingredients(recipe):
     return set(recipe.ingredient_list()) - BASIC_INGREDIENTS
+
+
+def entered_user_ingredient_set(user_ingredients):
+    return set(user_ingredients) - BASIC_INGREDIENTS
+
+
+def matching_user_ingredient_set(user_ingredients):
+    return entered_user_ingredient_set(user_ingredients)
 
 
 def recipe_query_text(recipe):
@@ -178,11 +247,6 @@ def title_relevance_score(recipe, query_text):
 
 def best_title_relevance_score(recipe, *query_texts):
     return max((title_relevance_score(recipe, query_text) for query_text in query_texts if query_text), default=0.0)
-
-
-def is_exact_title_match(recipe, *query_texts):
-    title_text = exact_searchable_text(recipe.title)
-    return bool(title_text) and any(exact_searchable_text(query_text) == title_text for query_text in query_texts if query_text)
 
 
 def build_similarity_index():
@@ -242,13 +306,14 @@ def apply_similar_filters(filters):
 
 
 def sort_strict_matches(matches, user_ingredients, ingredients_text, normalized_input):
-    user_ingredient_set = set(user_ingredients) - BASIC_INGREDIENTS
+    user_ingredient_set = matching_user_ingredient_set(user_ingredients)
+    entered_ingredient_set = entered_user_ingredient_set(user_ingredients)
     similarity_scores = score_recipes_by_similarity(user_ingredients)
 
     def sort_key(recipe):
         recipe_ingredients = required_recipe_ingredients(recipe)
-        matched_count = len(recipe_ingredients & user_ingredient_set)
-        query_coverage = matched_count / len(user_ingredient_set) if user_ingredient_set else 0.0
+        matched_count = len(matched_recipe_ingredients(recipe_ingredients, user_ingredient_set))
+        query_coverage = min(1.0, matched_count / len(entered_ingredient_set)) if entered_ingredient_set else 0.0
         return (
             -matched_count,
             -query_coverage,
@@ -301,10 +366,10 @@ def sort_similar_matches(matches, sort_key):
 
     matches.sort(
         key=lambda item: (
-            -item["match_count"],
-            -item.get("relevance_value", item["relevance_score"]),
-            -item["match_ratio"],
             item["missing_count"],
+            -item.get("relevance_value", item["relevance_score"]),
+            -item["match_count"],
+            -item["match_ratio"],
             -item["score"],
             item["recipe"].title.lower(),
         )
@@ -312,24 +377,20 @@ def sort_similar_matches(matches, sort_key):
 
 
 def relevance_value(match_ratio, query_coverage, similarity_score, missing_count, max_missing, title_score=0.0):
-    missing_penalty = (missing_count / max_missing) * 0.10 if max_missing else 0
+    completeness_score = 1 - (missing_count / max_missing) if max_missing else 0
     weighted_score = (
-        (match_ratio * 0.35)
-        + (query_coverage * 0.35)
-        + (similarity_score * 0.15)
-        + (title_score * 0.15)
-        - missing_penalty
+        (completeness_score * 0.85)
+        + (match_ratio * 0.10)
+        + (query_coverage * 0.03)
+        + (similarity_score * 0.01)
+        + (title_score * 0.01)
     )
     return max(0, min(1, weighted_score)) * 100
 
 
-def relevance_percent(match_ratio, query_coverage, similarity_score, missing_count, max_missing, title_score=0.0):
-    return round(relevance_value(match_ratio, query_coverage, similarity_score, missing_count, max_missing, title_score))
-
-
 def get_strict_recommendations(ingredients_text, page, per_page, diet="", difficulty=""):
     user_ingredients, normalized_input = parse_ingredient_query(ingredients_text)
-    user_ingredient_set = set(user_ingredients) - BASIC_INGREDIENTS
+    user_ingredient_set = matching_user_ingredient_set(user_ingredients)
     matches = []
     seen_recipes = set()
 
@@ -348,7 +409,7 @@ def get_strict_recommendations(ingredients_text, page, per_page, diet="", diffic
             recipe_required = required_recipe_ingredients(recipe)
             if not recipe_required:
                 continue
-            if recipe_required.issubset(user_ingredient_set):
+            if recipe_required and not missing_recipe_ingredients(recipe_required, user_ingredient_set):
                 matches.append(recipe)
                 seen_recipes.add(recipe_key)
 
@@ -362,7 +423,8 @@ def get_strict_recommendations(ingredients_text, page, per_page, diet="", diffic
 
 def get_similar_recommendations(ingredients_text, filters, page, per_page, max_missing=5):
     user_ingredients, normalized_input = parse_ingredient_query(ingredients_text)
-    user_ingredient_set = set(user_ingredients) - BASIC_INGREDIENTS
+    user_ingredient_set = matching_user_ingredient_set(user_ingredients)
+    entered_ingredient_set = entered_user_ingredient_set(user_ingredients)
 
     if not user_ingredients:
         return {
@@ -383,14 +445,13 @@ def get_similar_recommendations(ingredients_text, filters, page, per_page, max_m
 
         recipe_ingredients = required_recipe_ingredients(recipe)
         title_score = best_title_relevance_score(recipe, ingredients_text, normalized_input)
-        has_exact_title = is_exact_title_match(recipe, ingredients_text, normalized_input)
         is_title_match = title_score >= TITLE_MATCH_THRESHOLD
 
-        if recipe_ingredients.issubset(user_ingredient_set):
+        missing = missing_recipe_ingredients(recipe_ingredients, user_ingredient_set)
+        if not missing:
             continue
 
-        missing = sorted(recipe_ingredients - user_ingredient_set)
-        matched = sorted(recipe_ingredients & user_ingredient_set)
+        matched = matched_recipe_ingredients(recipe_ingredients, user_ingredient_set)
 
         if not matched and not is_title_match:
             continue
@@ -400,9 +461,9 @@ def get_similar_recommendations(ingredients_text, filters, page, per_page, max_m
         match_ratio = match_count / required_count if required_count else 0.0
         missing_count = len(missing)
         similarity_score = similarity_scores.get(recipe.id, 0.0)
-        query_coverage = match_count / len(user_ingredient_set) if user_ingredient_set else 0.0
-        is_primary_ingredient_match = bool(user_ingredient_set) and len(user_ingredient_set) <= 2 and query_coverage >= 1.0
-        is_complete_query_match = bool(user_ingredient_set) and len(user_ingredient_set) <= 4 and query_coverage >= 1.0
+        query_coverage = min(1.0, match_count / len(entered_ingredient_set)) if entered_ingredient_set else 0.0
+        is_primary_ingredient_match = bool(entered_ingredient_set) and len(entered_ingredient_set) <= 2 and query_coverage >= 1.0
+        is_complete_query_match = bool(entered_ingredient_set) and len(entered_ingredient_set) <= 4 and query_coverage >= 1.0
 
         if not 1 <= missing_count <= max_missing:
             continue
@@ -426,7 +487,7 @@ def get_similar_recommendations(ingredients_text, filters, page, per_page, max_m
             max_missing,
             title_score,
         )
-        relevance_score = round((match_count * 1000) + relevance_display_value, 6)
+        relevance_score = round(relevance_display_value, 6)
 
         candidates.append(
             {

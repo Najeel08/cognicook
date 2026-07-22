@@ -103,7 +103,7 @@
             {% endif %}
           </form>
           {% else %}
-          <a href="{{ url_for('login') }}" class="btn btn-neon-primary btn-sm">Log in to Save</a>
+          <a href="{{ url_for('login', save_recipe=item.recipe.id, next=request.full_path) }}" class="btn btn-neon-primary btn-sm">Log in to Save</a>
           {% endif %}
         </div>
       </div>

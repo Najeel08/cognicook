@@ -18,7 +18,6 @@ REQUIRED_COLUMNS = {
     "difficulty",
     "cooking_time",
 }
-ALLOWED_DIET_TYPES = {"veg", "non_veg"}
 ALLOWED_DIFFICULTIES = {"easy", "medium", "hard"}
 DIET_TYPE_ALIASES = {
     "veg": "veg",
@@ -30,7 +29,7 @@ DIET_TYPE_ALIASES = {
     "non_veg": "non_veg",
     "nonvegetarian": "non_veg",
 }
-ALLOWED_DIET_TYPES.update(DIET_TYPE_ALIASES.values())
+ALLOWED_DIET_TYPES = {"veg", "non_veg"} | set(DIET_TYPE_ALIASES.values())
 MAX_TITLE_LENGTH = 200
 MAX_TEXT_LENGTH = 10000
 MAX_COOKING_TIME_MINUTES = 24 * 60

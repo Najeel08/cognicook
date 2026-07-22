@@ -44,6 +44,12 @@
         type="hidden"
         name="csrf_token"
         value="{{ csrf_token() }}" />
+      {% if save_recipe %}
+      <input type="hidden" name="save_recipe" value="{{ save_recipe }}" />
+      {% endif %}
+      {% if next_url %}
+      <input type="hidden" name="next" value="{{ next_url }}" />
+      {% endif %}
 
       <label class="field-label" for="username">
         Username

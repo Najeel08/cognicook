@@ -35,10 +35,15 @@
             <span class="brandmark-word">CogniCook</span>
           </a>
 
-          {% if current_user.is_authenticated %}
           <div class="topbar-actions">
+          {% if current_user.is_authenticated %}
             <a href="{{ url_for('dashboard') }}" class="btn btn-neon-secondary" {% if request.endpoint == "dashboard" %}aria-current="page"{% endif %}>Dashboard</a>
             <a href="{{ url_for('favorites') }}" class="btn btn-neon-secondary" {% if request.endpoint == "favorites" %}aria-current="page"{% endif %}>Favorites</a>
+          {% else %}
+            <a href="{{ url_for('dashboard') }}" class="btn btn-neon-secondary" {% if request.endpoint == "dashboard" %}aria-current="page"{% endif %}>Dashboard</a>
+            <a href="{{ url_for('login') }}" class="btn btn-neon-secondary" {% if request.endpoint == "login" %}aria-current="page"{% endif %}>Login</a>
+            <a href="{{ url_for('register') }}" class="btn btn-neon-secondary" {% if request.endpoint == "register" %}aria-current="page"{% endif %}>Register</a>
+          {% endif %}
             <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light mode" aria-pressed="false" title="Switch theme">
               <span class="theme-toggle-track" aria-hidden="true">
                 <span class="theme-toggle-thumb">
@@ -47,26 +52,13 @@
                 </span>
               </span>
             </button>
+          {% if current_user.is_authenticated %}
             <form method="POST" action="{{ url_for('logout') }}" class="d-inline">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
               <button type="submit" class="btn btn-danger-soft">Logout</button>
             </form>
-          </div>
-          {% else %}
-          <div class="topbar-actions">
-            <a href="{{ url_for('dashboard') }}" class="btn btn-neon-secondary" {% if request.endpoint == "dashboard" %}aria-current="page"{% endif %}>Dashboard</a>
-            <a href="{{ url_for('login') }}" class="btn btn-neon-secondary" {% if request.endpoint == "login" %}aria-current="page"{% endif %}>Login</a>
-            <a href="{{ url_for('register') }}" class="btn btn-neon-secondary" {% if request.endpoint == "register" %}aria-current="page"{% endif %}>Register</a>
-            <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light mode" aria-pressed="false" title="Switch theme">
-              <span class="theme-toggle-track" aria-hidden="true">
-                <span class="theme-toggle-thumb">
-                  <span class="theme-toggle-icon theme-toggle-icon-moon"></span>
-                  <span class="theme-toggle-icon theme-toggle-icon-sun"></span>
-                </span>
-              </span>
-            </button>
-          </div>
           {% endif %}
+          </div>
         </div>
       </nav>
 

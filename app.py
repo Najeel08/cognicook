@@ -22,9 +22,10 @@ from utils.validators import is_safe_input
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 ALLOWED_QUERY_PARAMS_BY_ENDPOINT = {
     "landing": set(),
-    "login": set(),
-    "register": set(),
+    "login": {"save_recipe", "next"},
+    "register": {"save_recipe", "next"},
     "dashboard": set(),
+    "static": {"v"},
     "recommendations": {"ingredients", "diet", "difficulty", "page", "per_page"},
     "similar_recipes_page": {"ingredients", "diet", "difficulty", "sort", "page", "per_page"},
     "favorites": {"diet", "difficulty", "page", "per_page"},
@@ -41,6 +42,7 @@ QUERY_PARAM_MAX_LENGTHS = {
     "difficulty": 20,
     "sort": 30,
     "next": 1200,
+    "save_recipe": 10,
 }
 
 
@@ -276,7 +278,7 @@ def create_app(config_object=Config):
         return session["_csrf_token"]
 
     def allowed_query_params_for_current_endpoint():
-        return ALLOWED_QUERY_PARAMS_BY_ENDPOINT.get(request.endpoint)
+        return ALLOWED_QUERY_PARAMS_BY_ENDPOINT.get(request.endpoint, set())
 
     def query_param_is_safe(key, value):
         max_length = QUERY_PARAM_MAX_LENGTHS.get(key, 120)
@@ -286,13 +288,13 @@ def create_app(config_object=Config):
         allowed_params = allowed_query_params_for_current_endpoint()
         args = {}
         for key, value in request.args.items():
-            if allowed_params is not None and key not in allowed_params:
+            if key not in allowed_params:
                 continue
             if query_param_is_safe(key, value):
                 args[key] = value
 
         for key, value in updates.items():
-            if allowed_params is not None and key not in allowed_params:
+            if key not in allowed_params:
                 continue
             if value in (None, "", False):
                 args.pop(key, None)
@@ -418,8 +420,6 @@ def create_app(config_object=Config):
             abort(400)
 
         allowed_params = allowed_query_params_for_current_endpoint()
-        if allowed_params is None:
-            return
 
         for key, values in request.args.lists():
             if (

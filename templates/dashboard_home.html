@@ -14,7 +14,7 @@
     </p>
   </div>
 
-  <form method="POST" class="ingredient-form search-panel dashboard-search-panel">
+  <form method="POST" class="ingredient-form search-panel dashboard-search-panel" role="search">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
     <div class="search-panel-header dashboard-search-header">
@@ -28,12 +28,13 @@
         <p class="eyebrow search-eyebrow">Recipe search</p>
         <h2>Start with what you have</h2>
         <p class="search-panel-copy">
-          Everyday staples like salt, oil, sugar, and water are counted automatically.
+          Everyday staples like salt, sugar, and water are counted automatically.
         </p>
       </div>
     </div>
+    
 
-    <label class="field-label dashboard-field-label" for="ingredients"><font size="4">Available ingredients</font></label>
+    <label class="field-label dashboard-field-label" for="ingredients">Available ingredients</label>
     <div class="dashboard-textarea-wrap">
       <textarea
         id="ingredients"
@@ -56,7 +57,7 @@
           <path d="M12 3.5 14.4 9l6 .6-4.5 4 1.3 5.9L12 16.4l-5.2 3.1 1.3-5.9-4.5-4 6-.6L12 3.5Z"></path>
         </svg>
       </span>
-      <span>Separate ingredients using commas for better recipe matching.</span>
+      <span>Enter at least 3 ingredients and separate them using commas for better recipe matching.</span>
     </div>
 
     <button type="submit" class="btn btn-neon-primary dashboard-search-btn">

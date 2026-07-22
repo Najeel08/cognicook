@@ -31,10 +31,12 @@ from utils.validators import (
 
 MAX_INGREDIENT_INPUT_LENGTH = 1000
 MAX_PASSWORD_INPUT_LENGTH = 256
+MIN_SEARCH_INGREDIENTS = 3
 DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
 INVALID_INGREDIENT_INPUT_MESSAGE = (
     "Invalid input: ingredients list must be under 1000 characters and cannot contain '<' or '>'."
 )
+MIN_SEARCH_INGREDIENTS_MESSAGE = "Enter at least 3 valid ingredients to see recommendations."
 
 
 def current_similar_filters():
@@ -101,6 +103,29 @@ def flash_errors(errors):
         flash(error, "danger")
 
 
+def auto_save_recipe_after_login(form):
+    save_recipe_id = form.get("save_recipe", "").strip()
+    next_url = get_safe_return_path(form.get("next", "").strip())
+    if not save_recipe_id or not save_recipe_id.isdigit():
+        return next_url or url_for("dashboard")
+    recipe_id = int(save_recipe_id)
+    recipe = db.session.get(Recipe, recipe_id)
+    if recipe is None:
+        return next_url or url_for("dashboard")
+    exists = Favorite.query.filter_by(user_id=current_user.id, recipe_id=recipe_id).first()
+    if exists:
+        flash(f"{recipe.title} is already saved to your favorites.", "info")
+    else:
+        db.session.add(Favorite(user_id=current_user.id, recipe_id=recipe_id))
+        try:
+            db.session.commit()
+            flash(f"{recipe.title} was saved to favorites.", "success")
+        except IntegrityError:
+            db.session.rollback()
+            flash("This recipe is already in your favorites.", "info")
+    return next_url or url_for("dashboard")
+
+
 def get_validated_ingredients(source):
     ingredients_input = (source.get("ingredients") or "").strip()
     if not is_safe_input(ingredients_input, max_length=MAX_INGREDIENT_INPUT_LENGTH) or "<" in ingredients_input or ">" in ingredients_input:
@@ -121,6 +146,10 @@ def validate_search_request(source):
     normalized_ingredients = clean_ingredients(ingredients_input)
     if not normalized_ingredients:
         flash("Please enter at least one valid ingredient to get suggestions.", "warning")
+        return None
+
+    if len(normalized_ingredients) < MIN_SEARCH_INGREDIENTS:
+        flash(MIN_SEARCH_INGREDIENTS_MESSAGE, "warning")
         return None
 
     return ingredients_input
@@ -162,11 +191,16 @@ def register_routes(app):
             ):
                 security_tools["record_auth_failure"](rate_limit_key)
                 flash("Invalid username or password.", "danger")
-                return render_template("login_v2.html", title="Login")
+                return render_template("login_v2.html", title="Login",
+                    save_recipe=request.form.get("save_recipe", ""),
+                    next_url=request.form.get("next", ""))
 
             if len(password) > MAX_PASSWORD_INPUT_LENGTH:
+                security_tools["record_auth_failure"](rate_limit_key)
                 flash("Invalid username or password.", "danger")
-                return render_template("login_v2.html", title="Login")
+                return render_template("login_v2.html", title="Login",
+                    save_recipe=request.form.get("save_recipe", ""),
+                    next_url=request.form.get("next", ""))
 
             user = User.query.filter(db.func.lower(User.name) == username.casefold()).first()
             password_matches = (
@@ -181,12 +215,15 @@ def register_routes(app):
                 session.permanent = True
                 security_tools["rotate_csrf_token"]()
                 flash(f"Welcome, {user.username}", "success")
-                return redirect(url_for("dashboard"))
+                redirect_url = auto_save_recipe_after_login(request.form)
+                return redirect(redirect_url)
 
             security_tools["record_auth_failure"](rate_limit_key)
             flash("Invalid username or password.", "danger")
 
-        return render_template("login_v2.html", title="Login")
+        return render_template("login_v2.html", title="Login",
+            save_recipe=request.args.get("save_recipe", ""),
+            next_url=request.args.get("next", ""))
 
     @app.route("/register", methods=["GET", "POST"])
     def register():
@@ -234,7 +271,9 @@ def register_routes(app):
             if errors:
                 security_tools["record_auth_failure"](email)
                 flash_errors(errors)
-                return redirect(url_for("register"))
+                return render_template("register_v2.html", title="Register",
+                    save_recipe=request.form.get("save_recipe", ""),
+                    next_url=request.form.get("next", ""))
 
             user = User(name=username, email=email)
             user.set_password(password)
@@ -251,13 +290,24 @@ def register_routes(app):
                     flash("Email address already in use. Please log in instead.", "danger")
                 else:
                     flash("Registration could not be completed. Please try again.", "danger")
-                return redirect(url_for("register"))
+                return render_template("register_v2.html", title="Register",
+                    save_recipe=request.form.get("save_recipe", ""),
+                    next_url=request.form.get("next", ""))
 
             security_tools["clear_auth_failures"](email)
             flash(f"Welcome, {user.username}", "success")
+            if request.form.get("save_recipe"):
+                session.clear()
+                login_user(user)
+                session.permanent = True
+                security_tools["rotate_csrf_token"]()
+                redirect_url = auto_save_recipe_after_login(request.form)
+                return redirect(redirect_url)
             return redirect(url_for("login"))
 
-        return render_template("register_v2.html", title="Register")
+        return render_template("register_v2.html", title="Register",
+            save_recipe=request.args.get("save_recipe", ""),
+            next_url=request.args.get("next", ""))
 
     @app.route("/dashboard", methods=["GET", "POST"])
     def dashboard():
@@ -270,6 +320,10 @@ def register_routes(app):
             cleaned_ingredients = clean_ingredients(ingredients_input)
             if not cleaned_ingredients:
                 flash("Enter at least one valid ingredient to see recommendations.", "warning")
+                return redirect(url_for("dashboard"))
+
+            if len(cleaned_ingredients) < MIN_SEARCH_INGREDIENTS:
+                flash(MIN_SEARCH_INGREDIENTS_MESSAGE, "warning")
                 return redirect(url_for("dashboard"))
 
             return redirect(url_for("recommendations", ingredients=ingredients_input))

@@ -351,6 +351,37 @@ class CogniCookAppTests(unittest.TestCase):
             ["cashew nuts"],
         )
 
+    def test_relevance_value_uses_proposal_weights_and_bounds(self):
+        from services.recipe_service import relevance_value
+
+        score = relevance_value(0.5, 0.5, 0.5, 5, 5, 0.5)
+        self.assertAlmostEqual(score, 7.5)
+
+        score_at_max_missing = relevance_value(1.0, 1.0, 1.0, 5, 5, 1.0)
+        self.assertAlmostEqual(score_at_max_missing, 15.0)
+
+        score_one_missing = relevance_value(1.0, 1.0, 1.0, 1, 5, 1.0)
+        self.assertAlmostEqual(score_one_missing, 83.0)
+        self.assertGreater(score_one_missing, score_at_max_missing)
+
+        self.assertEqual(relevance_value(1.0, 1.0, 1.0, -1, 5, 1.0), 100.0)
+        self.assertEqual(relevance_value(0.0, 0.0, 0.0, 10, 5, 0.0), 0.0)
+
+    def test_dashboard_requires_at_least_three_valid_ingredients(self):
+        self.register_user()
+        self.login_user()
+        token = self.get_csrf_token("/dashboard")
+
+        response = self.client.post(
+            "/dashboard",
+            data={"ingredients": "onion, tomato", "csrf_token": token},
+            follow_redirects=True,
+        )
+
+        text = response.get_data(as_text=True)
+        self.assertIn("Enter at least 3 valid ingredients", text)
+        self.assertIn("Available ingredients", text)
+
     def test_instruction_parser_preserves_single_action_phrases(self):
         self.assertEqual(
             split_instruction_block("Add oil and heat the pan."),
@@ -407,9 +438,14 @@ class CogniCookAppTests(unittest.TestCase):
         canonical_rows = load_dataset_rows(BASE_DIR / "dataset" / "recipes.csv")
 
         self.assertEqual(raw_rows, canonical_rows)
-        self.assertEqual(len(canonical_rows), 330)
+        self.assertEqual(len(canonical_rows), 333)
 
         for row in canonical_rows:
+            measurement_text = row["ingredient_measurements"]
+            self.assertNotIn("number", measurement_text.lower())
+            self.assertIsNone(re.search(r"(?<![/\d.])\b(?:[2-9]\d*|1\.\d+|[2-9]\d*\.\d+) cup\b", measurement_text))
+            self.assertIsNone(re.search(r"\b\d+(?:\.\d+)? liter\b", measurement_text, re.IGNORECASE))
+            self.assertNotIn("to taste", measurement_text)
             ingredients = [ingredient for ingredient in row["ingredients"].split(",") if ingredient]
             measurements = parse_ingredient_measurements(
                 row["ingredient_measurements"],
@@ -553,7 +589,7 @@ class CogniCookAppTests(unittest.TestCase):
 
         response = self.client.post(
             "/dashboard",
-            data={"ingredients": "onion, tomato, potato", "csrf_token": token},
+            data={"ingredients": "onion, tomato, potato, oil", "csrf_token": token},
             follow_redirects=True,
         )
 
@@ -607,7 +643,7 @@ class CogniCookAppTests(unittest.TestCase):
             )
             db.session.commit()
 
-            results = get_strict_recommendations("chicken onion tomato", page=1, per_page=10)
+            results = get_strict_recommendations("chicken onion tomato oil", page=1, per_page=10)
             titles = [recipe.title for recipe in results["strict"].items]
 
         self.assertLess(titles.index("Chicken Onion Tomato Curry"), titles.index("Onion Tomato Curry"))
@@ -637,7 +673,7 @@ class CogniCookAppTests(unittest.TestCase):
             db.session.commit()
 
             results = get_similar_recommendations(
-                "egg roast",
+                "egg roast oil",
                 {"diet": None, "difficulty": None, "sort": "relevance"},
                 page=1,
                 per_page=10,
@@ -728,7 +764,7 @@ class CogniCookAppTests(unittest.TestCase):
             )
             titles = [item["recipe"].title for item in results["similar"].items]
 
-        self.assertLess(titles.index("Chicken Onion Tomato Masala"), titles.index("Onion Tomato Masala"))
+        self.assertLess(titles.index("Onion Tomato Masala"), titles.index("Chicken Onion Tomato Masala"))
 
     def test_similar_relevance_percent_follows_default_ranking(self):
         with self.app.app_context():
@@ -739,10 +775,14 @@ class CogniCookAppTests(unittest.TestCase):
                 per_page=10,
             )
             items = results["similar"].items
-            scores = [item["relevance_score"] for item in items]
+            missing_counts = [item["missing_count"] for item in items]
 
-        self.assertGreaterEqual(len(scores), 2)
-        self.assertEqual(scores, sorted(scores, reverse=True))
+        self.assertGreaterEqual(len(missing_counts), 2)
+        self.assertEqual(missing_counts, sorted(missing_counts))
+        for previous, current in zip(items, items[1:]):
+            if previous["missing_count"] == current["missing_count"]:
+                self.assertGreaterEqual(previous["relevance_value"], current["relevance_value"])
+                self.assertEqual(previous["relevance_score"], previous["relevance_value"])
 
     def test_similar_relevance_orders_target_query_by_matches_then_raw_score(self):
         with self.app.app_context():
@@ -756,17 +796,103 @@ class CogniCookAppTests(unittest.TestCase):
             items = results["similar"].items
 
         self.assertGreaterEqual(len(items), 10)
-        match_counts = [item["match_count"] for item in items]
-        relevance_scores = [item["relevance_score"] for item in items]
-        self.assertEqual(match_counts, sorted(match_counts, reverse=True))
-        self.assertEqual(relevance_scores, sorted(relevance_scores, reverse=True))
+        missing_counts = [item["missing_count"] for item in items]
+        self.assertEqual(missing_counts, sorted(missing_counts))
         for previous, current in zip(items, items[1:]):
-            if previous["match_count"] == current["match_count"]:
+            if previous["missing_count"] == current["missing_count"]:
                 self.assertGreaterEqual(previous["relevance_value"], current["relevance_value"])
                 self.assertGreaterEqual(previous["relevance_percent"], current["relevance_percent"])
+                self.assertEqual(previous["relevance_score"], previous["relevance_value"])
+
+    def test_similar_recommendations_do_not_overmatch_bacalhau_ingredients(self):
+        with self.app.app_context():
+            replace_recipe_rows(load_dataset_rows(BASE_DIR / "dataset" / "recipes.csv"), preserve_favorites=False)
+            results = get_similar_recommendations(
+                "Garlic,onion,fish,potato,egg,parsley",
+                {"diet": "", "difficulty": "", "sort": "relevance"},
+                page=1,
+                per_page=30,
+            )
+            bacalhau_title = "bacalhau " + chr(0x00E0) + " br" + chr(0x00E1) + "s"
+            bacalhau_match = next(
+                item for item in results["similar"].items if item["recipe"].title == bacalhau_title
+            )
+
+        self.assertEqual(bacalhau_match["match_count"], 4)
+        self.assertEqual(bacalhau_match["required_count"], 9)
+        self.assertEqual(
+            bacalhau_match["matched"],
+            ["egg", "garlic", "onion", "parsley"],
+        )
+        self.assertEqual(
+            bacalhau_match["missing"],
+            ["black olives", "black pepper", "olive oil", "potato sticks", "salted cod"],
+        )
+
+    def test_similar_recommendations_match_bacalhau_when_cod_is_entered(self):
+        with self.app.app_context():
+            replace_recipe_rows(load_dataset_rows(BASE_DIR / "dataset" / "recipes.csv"), preserve_favorites=False)
+            results = get_similar_recommendations(
+                "Garlic,onion,cod,egg,parsley",
+                {"diet": "", "difficulty": "", "sort": "relevance"},
+                page=1,
+                per_page=30,
+            )
+            bacalhau_title = "bacalhau " + chr(0x00E0) + " br" + chr(0x00E1) + "s"
+            bacalhau_match = next(
+                item for item in results["similar"].items if item["recipe"].title == bacalhau_title
+            )
+
+        self.assertEqual(bacalhau_match["match_count"], 5)
+        self.assertEqual(
+            bacalhau_match["matched"],
+            ["egg", "garlic", "onion", "parsley", "salted cod"],
+        )
+        self.assertEqual(bacalhau_match["missing"], ["black olives", "black pepper", "olive oil", "potato sticks"])
+
+    def test_similar_recommendations_match_chocolate_family_ingredients(self):
+        with self.app.app_context():
+            replace_recipe_rows(load_dataset_rows(BASE_DIR / "dataset" / "recipes.csv"), preserve_favorites=False)
+            parsed, normalized = parse_ingredient_query("bread, milk, chocolate")
+            results = get_similar_recommendations(
+                "bread, milk, chocolate",
+                {"diet": "", "difficulty": "", "sort": "relevance"},
+                page=1,
+                per_page=30,
+            )
+            items_by_title = {item["recipe"].title: item for item in results["similar"].items}
+
+        self.assertEqual(parsed, ["bread", "milk", "chocolate"])
+        self.assertEqual(normalized, "bread, milk, chocolate")
+        self.assertIn("chocolate pudding", items_by_title)
+        self.assertIn("oreo milkshake", items_by_title)
+        self.assertNotIn("hot chocolate", items_by_title)
+        self.assertIn("chocolate chips", items_by_title["chocolate pudding"]["matched"])
+        self.assertIn("chocolate syrup", items_by_title["oreo milkshake"]["matched"])
+        self.assertNotIn("cocoa powder", items_by_title["chocolate pudding"]["matched"])
+
+    def test_generic_olives_and_oil_match_variants_without_unsafe_potato_overmatch(self):
+        with self.app.app_context():
+            replace_recipe_rows(load_dataset_rows(BASE_DIR / "dataset" / "recipes.csv"), preserve_favorites=False)
+            results = get_similar_recommendations(
+                "oil,olives,onion,garlic,egg,parsley,cod,potato",
+                {"diet": "", "difficulty": "", "sort": "relevance"},
+                page=1,
+                per_page=30,
+            )
+            bacalhau_title = "bacalhau " + chr(0x00E0) + " br" + chr(0x00E1) + "s"
+            bacalhau_match = next(
+                item for item in results["similar"].items if item["recipe"].title == bacalhau_title
+            )
+
+        self.assertIn("black olives", bacalhau_match["matched"])
+        self.assertNotIn("olive oil", bacalhau_match["matched"])
+        self.assertIn("olive oil", bacalhau_match["missing"])
+        self.assertIn("potato sticks", bacalhau_match["missing"])
+        self.assertNotIn("potato sticks", bacalhau_match["matched"])
 
     def test_recipe_discovery_is_available_before_login_but_save_requires_login(self):
-        response = self.client.get("/recommendations?ingredients=onion,tomato,potato")
+        response = self.client.get("/recommendations?ingredients=onion,tomato,potato,oil")
         text = response.get_data(as_text=True)
 
         self.assertEqual(response.status_code, 200)
@@ -778,7 +904,7 @@ class CogniCookAppTests(unittest.TestCase):
         self.register_user()
         self.login_user()
 
-        response = self.client.get("/similar?ingredients=onion,tomato,potato&per_page=2")
+        response = self.client.get("/similar?ingredients=onion,tomato,potato,oil&per_page=2")
         text = response.get_data(as_text=True)
 
         self.assertIn('aria-current="page"', text)
@@ -818,7 +944,7 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Rice Kanji", text)
 
     def test_strict_matching_accepts_slash_separated_ingredients(self):
-        response = self.client.get("/recommendations?ingredients=onion/tomato/potato")
+        response = self.client.get("/recommendations?ingredients=onion/tomato/potato/oil")
         text = response.get_data(as_text=True)
 
         self.assertEqual(response.status_code, 200)
@@ -854,7 +980,7 @@ class CogniCookAppTests(unittest.TestCase):
             )
             db.session.commit()
 
-        response = self.client.get("/similar?ingredients=onion,tomato,potato&per_page=10")
+        response = self.client.get("/similar?ingredients=onion,tomato,potato,oil&per_page=10")
         text = response.get_data(as_text=True)
 
         self.assertIn("Paneer Masala", text)
@@ -869,7 +995,7 @@ class CogniCookAppTests(unittest.TestCase):
         self.register_user()
         self.login_user()
 
-        response = self.client.get("/similar?ingredients=onion,tomato,potato&per_page=10")
+        response = self.client.get("/similar?ingredients=onion,tomato,potato,oil&per_page=10")
         text = response.get_data(as_text=True)
 
         self.assertIn('value="relevance" selected', text)
@@ -877,7 +1003,7 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("<strong>Ingredient match:</strong>", text)
         self.assertLess(text.index("Paneer Masala"), text.index("Dal Fry"))
         self.assertLess(text.index("Tomato Rice"), text.index("Dal Fry"))
-        self.assertLess(text.index("Vegetable Korma"), text.index("Dal Fry"))
+        self.assertLess(text.index("Dal Fry"), text.index("Vegetable Korma"))
 
     def test_similar_page_prioritizes_higher_overlap_before_weaker_matches(self):
         self.register_user()
@@ -917,8 +1043,8 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.client.get("/similar?ingredients=onion,rice,tomato&per_page=10")
         text = response.get_data(as_text=True)
 
-        self.assertLess(text.index("Uttapam"), text.index("Idli"))
-        self.assertLess(text.index("Uttapam"), text.index("Dosa"))
+        self.assertLess(text.index("Idli"), text.index("Uttapam"))
+        self.assertLess(text.index("Dosa"), text.index("Uttapam"))
         self.assertIn("<strong>Ingredient match:</strong> 2 of 4", text)
         self.assertIn("<strong>Matched:</strong> onion, rice", text)
         self.assertIn("<strong>Missing extras:</strong> green chilli, urad dal", text)
@@ -942,7 +1068,7 @@ class CogniCookAppTests(unittest.TestCase):
             )
             db.session.commit()
 
-        response = self.client.get("/similar?ingredients=onion,tomato,potato")
+        response = self.client.get("/similar?ingredients=onion,tomato,potato,oil")
         text = response.get_data(as_text=True)
 
         self.assertEqual(response.status_code, 200)
@@ -952,12 +1078,12 @@ class CogniCookAppTests(unittest.TestCase):
         self.register_user()
         self.login_user()
 
-        response = self.client.get("/similar?ingredients=onion,tomato,potato&diet=non_veg")
+        response = self.client.get("/similar?ingredients=onion,tomato,potato,oil&diet=non_veg")
         text = response.get_data(as_text=True)
         self.assertIn("Masala Omelette", text)
         self.assertNotIn("Paneer Masala", text)
 
-        response = self.client.get("/similar?ingredients=onion,tomato,potato,paneer&difficulty=easy&sort=time_desc&per_page=10")
+        response = self.client.get("/similar?ingredients=onion,tomato,potato,oil,paneer&difficulty=easy&sort=time_desc&per_page=10")
         text = response.get_data(as_text=True)
         self.assertIn("Tomato Rice", text)
         self.assertIn("Masala Omelette", text)
@@ -999,7 +1125,7 @@ class CogniCookAppTests(unittest.TestCase):
         token = self.get_csrf_token("/recommendations?ingredients=onion,tomato,potato")
         self.client.post("/favorite/1", data={"csrf_token": token}, follow_redirects=True)
 
-        response = self.client.get("/recommendations?ingredients=onion,tomato,potato")
+        response = self.client.get("/recommendations?ingredients=onion,tomato,potato,oil")
         text = response.get_data(as_text=True)
         self.assertIn(">Remove<", text)
 
@@ -1007,11 +1133,11 @@ class CogniCookAppTests(unittest.TestCase):
         self.register_user()
         self.login_user()
 
-        response = self.client.get("/recommendations?ingredients=onion,tomato,potato")
+        response = self.client.get("/recommendations?ingredients=onion,tomato,potato,oil")
         text = response.get_data(as_text=True)
         self.assertIn("Back to Dashboard", text)
 
-        response = self.client.get("/similar?ingredients=onion,tomato,potato")
+        response = self.client.get("/similar?ingredients=onion,tomato,potato,oil")
         text = response.get_data(as_text=True)
         self.assertIn("Back to Exact Matches", text)
         self.assertIn("Back to Dashboard", text)
@@ -1072,7 +1198,7 @@ class CogniCookAppTests(unittest.TestCase):
 
         token = self.get_csrf_token("/recommendations?ingredients=onion,tomato,potato")
         self.client.post("/favorite/1", data={"csrf_token": token}, follow_redirects=True)
-        token = self.get_csrf_token("/similar?ingredients=onion,tomato,potato")
+        token = self.get_csrf_token("/similar?ingredients=onion,tomato,potato,oil")
         self.client.post("/favorite/2", data={"csrf_token": token}, follow_redirects=True)
 
         response = self.client.get("/favorites?page=1")
@@ -1404,22 +1530,22 @@ class CogniCookAppTests(unittest.TestCase):
         expected = {
             "french toast": {
                 "ingredients": ["bread", "egg", "milk", "sugar", "cardamom powder", "vanilla extract", "butter", "salt"],
-                "measurements": ["4 number", "2 number", "1/2 cup", "2 tbsp", "1/2 tsp", "1/2 tsp", "2 tbsp", "1/4 tsp"],
+                "measurements": ["4", "2", "1/2 cup", "2 tbsp", "1/2 tsp", "1/2 tsp", "2 tbsp", "1/4 tsp"],
                 "steps": ["Beat 2 eggs", "Add the remaining 1 tbsp butter", "Rest for 1 minute"],
             },
             "ragi kanji": {
                 "ingredients": ["ragi flour", "water", "milk", "jaggery", "cardamom"],
-                "measurements": ["1/2 cup", "2 cup", "1 cup", "1/4 cup", "1/4 tsp (powder)"],
+                "measurements": ["1/2 cup", "2 cups", "1 cup", "1/4 cup", "1/4 tsp (powder)"],
                 "steps": ["Mix the ragi flour", "strained jaggery syrup", "serve warm"],
             },
             "cabbage thoran": {
                 "ingredients": ["cabbage", "coconut", "green chilli", "onion", "curry leaves", "mustard seeds", "coconut oil", "turmeric powder", "salt"],
-                "measurements": ["4 cup", "1 cup", "2 number", "1 cup", "8-10 leaves", "1 tsp", "3 tbsp", "1/2 tsp", "1 tsp"],
+                "measurements": ["4 cups", "1 cup", "2", "1 cup", "8-10 leaves", "1 tsp", "3 tbsp", "1/2 tsp", "1 tsp"],
                 "steps": ["Wash the cabbage", "mustard seeds", "freshly grated coconut"],
             },
             "bread omelette": {
                 "ingredients": ["bread", "egg", "onion", "tomato", "green chilli", "coriander leaves", "butter", "salt", "black pepper"],
-                "measurements": ["4 number", "3 number", "1/2 cup", "1/4 cup", "2 number", "1/4 cup", "2 tbsp", "3/4 tsp", "1/2 tsp"],
+                "measurements": ["4", "3", "1/2 cup", "1/4 cup", "2", "1/4 cup", "2 tbsp", "3/4 tsp", "1/2 tsp"],
                 "steps": ["Crack 3 eggs", "place 2 bread slices", "Rest for 1 minute"],
             },
         }
