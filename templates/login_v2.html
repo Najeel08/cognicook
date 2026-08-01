@@ -93,7 +93,7 @@
 
     <p class="auth-switch">
       New to CogniCook?
-      <a href="{{ url_for('register') }}">
+      <a href="{{ url_for('register', save_recipe=save_recipe, next=next_url) if save_recipe or next_url else url_for('register') }}">
         Create an account
       </a>
     </p>

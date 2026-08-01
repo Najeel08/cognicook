@@ -292,6 +292,37 @@ class CogniCookAppTests(unittest.TestCase):
         with self.client.session_transaction() as session:
             self.assertNotEqual(session["_csrf_token"], original_token)
 
+    def test_login_ignores_overlong_save_recipe_without_server_error(self):
+        self.register_user()
+        token = self.get_csrf_token("/login")
+
+        response = self.client.post(
+            "/login",
+            data={
+                "username": "tester_user",
+                "password": "SecurePass8",
+                "save_recipe": "9" * 5000,
+                "csrf_token": token,
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers.get("Location"), "/dashboard")
+
+    def test_auth_switch_links_preserve_pending_save_intent(self):
+        response = self.client.get("/login?save_recipe=1&next=%2Frecipe%2F1")
+        text = response.get_data(as_text=True)
+        self.assertIn('href="/register?', text)
+        self.assertIn("save_recipe=1", text)
+        self.assertIn("next=/recipe/1", text)
+
+        response = self.client.get("/register?save_recipe=1&next=%2Frecipe%2F1")
+        text = response.get_data(as_text=True)
+        self.assertIn('href="/login?', text)
+        self.assertIn("save_recipe=1", text)
+        self.assertIn("next=/recipe/1", text)
+
     def test_dashboard_requires_at_least_one_valid_ingredient(self):
         self.register_user()
         self.login_user()
@@ -1627,6 +1658,12 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn('href="/dashboard"', text)
         self.assertNotIn("evil.example", text)
 
+        response = self.client.get("/recipe/1?next=%2F%5Cevil.example%2Fhijack", follow_redirects=False)
+        text = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/dashboard"', text)
+        self.assertNotIn("evil.example", text)
+
     def test_tampered_user_session_does_not_raise_server_error(self):
         with self.client.session_transaction() as session:
             session["_user_id"] = "not-an-integer"
@@ -1782,6 +1819,15 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertRegex(body, r'/static/css/cognicook\.css\?v=[0-9a-f]{12}')
         self.assertRegex(body, r'/static/js/bootstrap\.bundle\.min\.js\?v=[0-9a-f]{12}')
         self.assertRegex(body, r'/static/js/cognicook\.js\?v=[0-9a-f]{12}')
+
+    def test_primary_button_keeps_original_orange_gradient_with_white_text(self):
+        stylesheet = (BASE_DIR / "static" / "css" / "cognicook.css").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "--primary-gradient: linear-gradient(135deg, #ff8a24 0%, #f97316 50%, #dc5c12 100%);",
+            stylesheet,
+        )
+        self.assertIn("--primary-text: #ffffff;", stylesheet)
 
     def test_email_uniqueness_is_case_insensitive(self):
         self.register_user(email="case@example.com")

@@ -32,6 +32,7 @@ from utils.validators import (
 
 MAX_INGREDIENT_INPUT_LENGTH = 1000
 MAX_PASSWORD_INPUT_LENGTH = 256
+MAX_SAVE_RECIPE_ID_LENGTH = 10
 MIN_SEARCH_INGREDIENTS = 3
 DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
 INVALID_INGREDIENT_INPUT_MESSAGE = (
@@ -54,7 +55,11 @@ def get_safe_redirect_target(default_endpoint, **values):
     referrer = request.referrer
     if referrer:
         parsed = urlsplit(referrer)
-        path_is_local = parsed.path.startswith("/") and not parsed.path.startswith("//")
+        path_is_local = (
+            parsed.path.startswith("/")
+            and not parsed.path.startswith("//")
+            and "\\" not in parsed.path
+        )
         path_is_safe = is_safe_input(parsed.path, max_length=2048)
         query_is_safe = is_safe_input(parsed.query, max_length=1200) and "<" not in parsed.query and ">" not in parsed.query
         if (
@@ -77,7 +82,11 @@ def get_safe_return_path(value):
         return ""
 
     parsed = urlsplit(value)
-    path_is_local = parsed.path.startswith("/") and not parsed.path.startswith("//")
+    path_is_local = (
+        parsed.path.startswith("/")
+        and not parsed.path.startswith("//")
+        and "\\" not in parsed.path
+    )
     path_is_safe = is_safe_input(parsed.path, max_length=2048)
     query_is_safe = is_safe_input(parsed.query, max_length=1200) and "<" not in parsed.query and ">" not in parsed.query
     if parsed.scheme or parsed.netloc or not path_is_local or not path_is_safe or not query_is_safe:
@@ -109,9 +118,16 @@ def flash_errors(errors):
 def auto_save_recipe_after_login(form):
     save_recipe_id = form.get("save_recipe", "").strip()
     next_url = get_safe_return_path(form.get("next", "").strip())
-    if not save_recipe_id or not save_recipe_id.isdigit():
+    if (
+        not save_recipe_id
+        or len(save_recipe_id) > MAX_SAVE_RECIPE_ID_LENGTH
+        or not save_recipe_id.isdigit()
+    ):
         return next_url or url_for("dashboard")
-    recipe_id = int(save_recipe_id)
+    try:
+        recipe_id = int(save_recipe_id)
+    except ValueError:
+        return next_url or url_for("dashboard")
     recipe = db.session.get(Recipe, recipe_id)
     if recipe is None:
         return next_url or url_for("dashboard")

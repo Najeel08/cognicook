@@ -181,7 +181,7 @@
 
     <p class="auth-switch">
       Already registered?
-      <a href="{{ url_for('login') }}">
+      <a href="{{ url_for('login', save_recipe=save_recipe, next=next_url) if save_recipe or next_url else url_for('login') }}">
         Log in here
       </a>
     </p>
