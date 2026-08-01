@@ -382,6 +382,34 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Enter at least 3 valid ingredients", text)
         self.assertIn("Available ingredients", text)
 
+    def test_dashboard_does_not_count_basic_staples_toward_minimum(self):
+        self.register_user()
+        self.login_user()
+        token = self.get_csrf_token("/dashboard")
+
+        response = self.client.post(
+            "/dashboard",
+            data={"ingredients": "onion, tomato, salt, water, sugar", "csrf_token": token},
+            follow_redirects=True,
+        )
+
+        text = response.get_data(as_text=True)
+        self.assertIn("besides salt, sugar, or water", text)
+        self.assertIn("Available ingredients", text)
+
+    def test_recommendations_does_not_count_basic_staples_toward_minimum(self):
+        self.register_user()
+        self.login_user()
+
+        response = self.client.get(
+            "/recommendations?ingredients=onion,tomato,salt,water,sugar",
+            follow_redirects=True,
+        )
+
+        text = response.get_data(as_text=True)
+        self.assertIn("besides salt, sugar, or water", text)
+        self.assertIn("Available ingredients", text)
+
     def test_instruction_parser_preserves_single_action_phrases(self):
         self.assertEqual(
             split_instruction_block("Add oil and heat the pan."),

@@ -14,6 +14,7 @@ from services.recipe_service import (
     DIET_OPTIONS,
     DIFFICULTY_OPTIONS,
     SIMILAR_SORT_OPTIONS,
+    entered_user_ingredient_set,
     get_filter_options,
     get_similar_recommendations,
     get_strict_recommendations,
@@ -36,7 +37,9 @@ DUMMY_PASSWORD_HASH = generate_password_hash(secrets.token_urlsafe(32))
 INVALID_INGREDIENT_INPUT_MESSAGE = (
     "Invalid input: ingredients list must be under 1000 characters and cannot contain '<' or '>'."
 )
-MIN_SEARCH_INGREDIENTS_MESSAGE = "Enter at least 3 valid ingredients to see recommendations."
+MIN_SEARCH_INGREDIENTS_MESSAGE = (
+    "Enter at least 3 valid ingredients besides salt, sugar, or water to see recommendations."
+)
 
 
 def current_similar_filters():
@@ -148,7 +151,7 @@ def validate_search_request(source):
         flash("Please enter at least one valid ingredient to get suggestions.", "warning")
         return None
 
-    if len(normalized_ingredients) < MIN_SEARCH_INGREDIENTS:
+    if len(entered_user_ingredient_set(normalized_ingredients)) < MIN_SEARCH_INGREDIENTS:
         flash(MIN_SEARCH_INGREDIENTS_MESSAGE, "warning")
         return None
 
@@ -322,7 +325,7 @@ def register_routes(app):
                 flash("Enter at least one valid ingredient to see recommendations.", "warning")
                 return redirect(url_for("dashboard"))
 
-            if len(cleaned_ingredients) < MIN_SEARCH_INGREDIENTS:
+            if len(entered_user_ingredient_set(cleaned_ingredients)) < MIN_SEARCH_INGREDIENTS:
                 flash(MIN_SEARCH_INGREDIENTS_MESSAGE, "warning")
                 return redirect(url_for("dashboard"))
 
