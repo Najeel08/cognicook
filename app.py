@@ -479,10 +479,10 @@ def create_app(config_object=Config):
             )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "style-src 'self' https://cdn.jsdelivr.net; "
+            "style-src 'self'; "
             "script-src 'self'; "
             "img-src 'self' data:; "
-            "font-src 'self' https://cdn.jsdelivr.net; "
+            "font-src 'self'; "
             "connect-src 'self'; "
             "object-src 'none'; "
             "base-uri 'self'; "

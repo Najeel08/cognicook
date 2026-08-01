@@ -600,7 +600,9 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn('data-password-toggle', login_text)
         self.assertIn('aria-label="Show password"', login_text)
         self.assertIn('aria-label="Primary navigation"', login_text)
-        self.assertNotIn("bootstrap.bundle.min.js", login_text)
+        self.assertIn("/static/css/bootstrap.min.css?v=", login_text)
+        self.assertIn("/static/js/bootstrap.bundle.min.js?v=", login_text)
+        self.assertNotIn("cdn.jsdelivr.net", login_text)
         self.assertNotIn("welcome back", login_text.lower())
         self.assertNotIn("Repeated failed logins are rate limited automatically", login_text)
 
@@ -1444,7 +1446,9 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertIn("Content-Security-Policy", response.headers)
         self.assertIn("connect-src 'self'", response.headers["Content-Security-Policy"])
         self.assertIn("script-src 'self'", response.headers["Content-Security-Policy"])
-        self.assertNotIn("script-src 'self' https://cdn.jsdelivr.net", response.headers["Content-Security-Policy"])
+        self.assertIn("style-src 'self'", response.headers["Content-Security-Policy"])
+        self.assertIn("font-src 'self'", response.headers["Content-Security-Policy"])
+        self.assertNotIn("cdn.jsdelivr.net", response.headers["Content-Security-Policy"])
         self.assertNotIn("'unsafe-inline'", response.headers["Content-Security-Policy"])
 
     def test_hsts_header_is_configurable_for_production_like_environments(self):
@@ -1521,6 +1525,16 @@ class CogniCookAppTests(unittest.TestCase):
         self.assertEqual(response.headers.get("Cache-Control"), "public, max-age=31536000, immutable")
         self.assertEqual(response.headers.get("X-Content-Type-Options"), "nosniff")
         self.assertNotEqual(response.headers.get("Pragma"), "no-cache")
+        response.close()
+
+        response = self.client.get("/static/css/bootstrap.min.css")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("Cache-Control"), "public, max-age=31536000, immutable")
+        response.close()
+
+        response = self.client.get("/static/js/bootstrap.bundle.min.js")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("Cache-Control"), "public, max-age=31536000, immutable")
         response.close()
 
         response = self.client.get("/static/js/cognicook.js")
@@ -1764,7 +1778,9 @@ class CogniCookAppTests(unittest.TestCase):
         response = self.client.get("/dashboard")
         body = response.get_data(as_text=True)
         self.assertRegex(body, r'/static/js/theme-init\.js\?v=[0-9a-f]{12}')
+        self.assertRegex(body, r'/static/css/bootstrap\.min\.css\?v=[0-9a-f]{12}')
         self.assertRegex(body, r'/static/css/cognicook\.css\?v=[0-9a-f]{12}')
+        self.assertRegex(body, r'/static/js/bootstrap\.bundle\.min\.js\?v=[0-9a-f]{12}')
         self.assertRegex(body, r'/static/js/cognicook\.js\?v=[0-9a-f]{12}')
 
     def test_email_uniqueness_is_case_insensitive(self):
