@@ -115,7 +115,14 @@ def flash_errors(errors):
         flash(error, "danger")
 
 
-def auto_save_recipe_after_login(form):
+def create_login_session(user, security_tools):
+    session.clear()
+    login_user(user)
+    session.permanent = True
+    security_tools["rotate_csrf_token"]()
+
+
+def auto_save_recipe_after_login(form, saved_message=None):
     save_recipe_id = form.get("save_recipe", "").strip()
     next_url = get_safe_return_path(form.get("next", "").strip())
     if (
@@ -138,7 +145,7 @@ def auto_save_recipe_after_login(form):
         db.session.add(Favorite(user_id=current_user.id, recipe_id=recipe_id))
         try:
             db.session.commit()
-            flash(f"{recipe.title} was saved to favorites.", "success")
+            flash(saved_message or f"{recipe.title} was saved to favorites.", "success")
         except IntegrityError:
             db.session.rollback()
             flash("This recipe is already in your favorites.", "info")
@@ -152,19 +159,23 @@ def get_validated_ingredients(source):
     return ingredients_input
 
 
-def validate_search_request(source):
+def validate_search_request(
+    source,
+    empty_message="Enter at least one ingredient to see recommendations.",
+    no_valid_message="Please enter at least one valid ingredient to get suggestions.",
+):
     ingredients_input = get_validated_ingredients(source)
     if ingredients_input is None:
         flash(INVALID_INGREDIENT_INPUT_MESSAGE, "warning")
         return None
 
     if not ingredients_input:
-        flash("Enter at least one ingredient to see recommendations.", "warning")
+        flash(empty_message, "warning")
         return None
 
     normalized_ingredients = clean_ingredients(ingredients_input)
     if not normalized_ingredients:
-        flash("Please enter at least one valid ingredient to get suggestions.", "warning")
+        flash(no_valid_message, "warning")
         return None
 
     if len(entered_user_ingredient_set(normalized_ingredients)) < MIN_SEARCH_INGREDIENTS:
@@ -229,10 +240,7 @@ def register_routes(app):
             )
             if user and password_matches:
                 security_tools["clear_auth_failures"](rate_limit_key)
-                session.clear()
-                login_user(user)
-                session.permanent = True
-                security_tools["rotate_csrf_token"]()
+                create_login_session(user, security_tools)
                 flash(f"Welcome, {user.username}", "success")
                 redirect_url = auto_save_recipe_after_login(request.form)
                 return redirect(redirect_url)
@@ -314,15 +322,16 @@ def register_routes(app):
                     next_url=request.form.get("next", ""))
 
             security_tools["clear_auth_failures"](email)
-            flash(f"Welcome, {user.username}", "success")
+            create_login_session(user, security_tools)
             if request.form.get("save_recipe"):
-                session.clear()
-                login_user(user)
-                session.permanent = True
-                security_tools["rotate_csrf_token"]()
-                redirect_url = auto_save_recipe_after_login(request.form)
+                redirect_url = auto_save_recipe_after_login(
+                    request.form,
+                    saved_message="Account created successfully! Your recipe has been added to your favourites.",
+                )
                 return redirect(redirect_url)
-            return redirect(url_for("login"))
+            flash("Account created successfully!", "success")
+            redirect_url = auto_save_recipe_after_login(request.form)
+            return redirect(redirect_url)
 
         return render_template("register_v2.html", title="Register",
             save_recipe=request.args.get("save_recipe", ""),
@@ -331,18 +340,12 @@ def register_routes(app):
     @app.route("/dashboard", methods=["GET", "POST"])
     def dashboard():
         if request.method == "POST":
-            ingredients_input = get_validated_ingredients(request.form)
+            ingredients_input = validate_search_request(
+                request.form,
+                empty_message="Enter at least one valid ingredient to see recommendations.",
+                no_valid_message="Enter at least one valid ingredient to see recommendations.",
+            )
             if ingredients_input is None:
-                flash(INVALID_INGREDIENT_INPUT_MESSAGE, "warning")
-                return redirect(url_for("dashboard"))
-
-            cleaned_ingredients = clean_ingredients(ingredients_input)
-            if not cleaned_ingredients:
-                flash("Enter at least one valid ingredient to see recommendations.", "warning")
-                return redirect(url_for("dashboard"))
-
-            if len(entered_user_ingredient_set(cleaned_ingredients)) < MIN_SEARCH_INGREDIENTS:
-                flash(MIN_SEARCH_INGREDIENTS_MESSAGE, "warning")
                 return redirect(url_for("dashboard"))
 
             return redirect(url_for("recommendations", ingredients=ingredients_input))

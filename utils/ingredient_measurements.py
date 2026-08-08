@@ -112,7 +112,7 @@ def _measurements_from_text(value):
         try:
             return parse_ingredient_measurements(json.loads(text))
         except (TypeError, ValueError, json.JSONDecodeError):
-            pass
+            return []
 
     records = []
     for chunk in re.split(r"\s*(?:;|\||\n)\s*", text):

@@ -1,6 +1,9 @@
+import logging
+from collections import Counter
 from pathlib import Path
 
 import pandas as pd
+from sqlalchemy.exc import SQLAlchemyError
 
 from extensions import db
 from models.favorite import Favorite
@@ -33,6 +36,7 @@ ALLOWED_DIET_TYPES = {"veg", "non_veg"} | set(DIET_TYPE_ALIASES.values())
 MAX_TITLE_LENGTH = 200
 MAX_TEXT_LENGTH = 10000
 MAX_COOKING_TIME_MINUTES = 24 * 60
+LOGGER = logging.getLogger(__name__)
 
 
 def validate_dataset_path(dataset_path):
@@ -58,6 +62,8 @@ def normalize_diet_type(value):
 
 def parse_int(value, default=0, minimum=0, maximum=None):
     def fallback_value():
+        if default is None:
+            return None
         fallback = max(default, minimum)
         if maximum is not None:
             fallback = min(fallback, maximum)
@@ -92,7 +98,7 @@ def normalize_instructions(value):
     return " ".join(normalized_lines)
 
 
-def normalize_row(row):
+def normalize_row_with_reason(row):
     title = normalize_search_text(row.get("title", ""))
     ingredients = normalize_ingredient_text(row.get("ingredients", ""))
     instructions = normalize_instructions(row.get("instructions", ""))
@@ -100,7 +106,7 @@ def normalize_row(row):
     difficulty = normalize_category(row.get("difficulty", ""))
     cooking_time = parse_int(
         row.get("cooking_time", 0),
-        default=0,
+        default=None,
         minimum=0,
         maximum=MAX_COOKING_TIME_MINUTES,
     )
@@ -111,18 +117,24 @@ def normalize_row(row):
         or ""
     )
 
-    if (
-        not title
-        or len(title) > MAX_TITLE_LENGTH
-        or not ingredients
-        or len(ingredients) > MAX_TEXT_LENGTH
-        or not instructions
-        or len(instructions) > MAX_TEXT_LENGTH
-        or diet_type not in ALLOWED_DIET_TYPES
-        or difficulty not in ALLOWED_DIFFICULTIES
-        or not cooking_time
-    ):
-        return None
+    if not title:
+        return None, "missing_title"
+    if len(title) > MAX_TITLE_LENGTH:
+        return None, "title_too_long"
+    if not ingredients:
+        return None, "missing_ingredients"
+    if len(ingredients) > MAX_TEXT_LENGTH:
+        return None, "ingredients_too_long"
+    if not instructions:
+        return None, "missing_instructions"
+    if len(instructions) > MAX_TEXT_LENGTH:
+        return None, "instructions_too_long"
+    if diet_type not in ALLOWED_DIET_TYPES:
+        return None, "invalid_diet_type"
+    if difficulty not in ALLOWED_DIFFICULTIES:
+        return None, "invalid_difficulty"
+    if cooking_time is None:
+        return None, "invalid_cooking_time"
 
     return {
         "title": title,
@@ -137,7 +149,12 @@ def normalize_row(row):
         "diet_type": diet_type,
         "difficulty": difficulty,
         "cooking_time": cooking_time,
-    }
+    }, None
+
+
+def normalize_row(row):
+    normalized, _reason = normalize_row_with_reason(row)
+    return normalized
 
 
 def recipe_identity(row):
@@ -181,18 +198,33 @@ def load_dataset_rows(dataset_path):
 
     normalized_rows = []
     seen_keys = set()
+    skipped_counts = Counter()
 
     for row in dataframe.to_dict("records"):
-        normalized = normalize_row(row)
+        normalized, rejection_reason = normalize_row_with_reason(row)
         if normalized is None:
+            skipped_counts[rejection_reason] += 1
             continue
 
         unique_key = recipe_identity(normalized)
         if unique_key in seen_keys:
+            skipped_counts["duplicate_recipe"] += 1
             continue
 
         seen_keys.add(unique_key)
         normalized_rows.append(normalized)
+
+    if skipped_counts:
+        skipped_summary = ", ".join(
+            f"{reason}={count}" for reason, count in sorted(skipped_counts.items())
+        )
+        LOGGER.info(
+            "Loaded %s recipe rows from %s; skipped %s rows (%s).",
+            len(normalized_rows),
+            path,
+            sum(skipped_counts.values()),
+            skipped_summary,
+        )
 
     return normalized_rows
 
@@ -234,7 +266,7 @@ def replace_recipe_rows(rows, preserve_favorites=True):
             if restored_favorites:
                 db.session.add_all(restored_favorites)
         db.session.commit()
-    except Exception:
+    except SQLAlchemyError:
         db.session.rollback()
         raise
 

@@ -92,6 +92,21 @@ class TestDatasetImport(CogniCookTestCase):
         self.assertEqual(records[1].ingredient, "tomato")
         self.assertEqual(records[1].display_measurement, "2 medium")
 
+    def test_data_loader_accepts_zero_minute_cooking_time(self):
+        row = normalize_row(
+            {
+                "title": "No Cook Salad",
+                "ingredients": "cucumber,tomato,salt",
+                "instructions": "Mix everything and serve.",
+                "diet_type": "veg",
+                "difficulty": "easy",
+                "cooking_time": "0",
+            }
+        )
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["cooking_time"], 0)
+
     def test_recipe_model_keeps_cleaned_ingredients_in_sync(self):
         with self.app.app_context():
             recipe = Recipe(

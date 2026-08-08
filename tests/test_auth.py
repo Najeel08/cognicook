@@ -1,6 +1,7 @@
 from tests.base import (
     CogniCookTestCase,
     db,
+    Favorite,
     Recipe,
     User,
 )
@@ -27,9 +28,6 @@ class TestAuth(CogniCookTestCase):
         response = self.register_user(email="amban@gmail.co")
         self.assertIn("Please enter a valid email address.", response.get_data(as_text=True))
 
-        response = self.register_user(email="person@example.co")
-        self.assertIn("Welcome, tester_user", response.get_data(as_text=True))
-
         response = self.register_user(username="ab", email="another@example.com")
         self.assertIn("Username must be 3 to 30 characters", response.get_data(as_text=True))
 
@@ -50,6 +48,10 @@ class TestAuth(CogniCookTestCase):
         response = self.register_user(password="Password123")
         self.assertIn("Password is too common", response.get_data(as_text=True))
 
+        response = self.register_user(email="person@example.co")
+        self.assertIn("Account created successfully!", response.get_data(as_text=True))
+        self.assertIn("Logout", response.get_data(as_text=True))
+
     def test_register_rejects_mismatched_confirmation_and_unavailable_identity(self):
         token = self.get_csrf_token("/register")
         response = self.client.post(
@@ -64,8 +66,10 @@ class TestAuth(CogniCookTestCase):
             follow_redirects=True,
         )
         self.assertIn("Password confirmation does not match.", response.get_data(as_text=True))
+        self.assertNotIn("Logout", response.get_data(as_text=True))
+        self.assertEqual(self.client.get("/favorites", follow_redirects=False).status_code, 302)
 
-        self.register_user()
+        self.create_user()
 
         response = self.register_user(username="second_user")
         self.assertIn(
@@ -110,9 +114,12 @@ class TestAuth(CogniCookTestCase):
         response = self.register_user(email="USER@Example.com")
         registration_text = response.get_data(as_text=True)
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Welcome, tester_user", registration_text)
-        self.assertIn("<h2>Login</h2>", registration_text)
+        self.assertIn("Account created successfully!", registration_text)
+        self.assertIn("Search Recipes", registration_text)
+        self.assertIn("Logout", registration_text)
         self.assertNotIn("Welcome Back", registration_text)
+
+        self.logout_user()
 
         response = self.login_user(username="tester@example.com")
         self.assertIn("Invalid username or password.", response.get_data(as_text=True))
@@ -129,8 +136,58 @@ class TestAuth(CogniCookTestCase):
             self.assertIsNotNone(user)
             self.assertEqual(user.username, "tester_user")
 
+    def test_register_from_login_to_save_auto_logs_in_saves_and_returns(self):
+        next_url = "/recommendations?ingredients=onion,tomato,potato,oil"
+        token = self.get_csrf_token(f"/register?save_recipe=1&next={next_url}")
+
+        response = self.client.post(
+            "/register",
+            data={
+                "username": "save_user",
+                "email": "save@example.com",
+                "password": "SecurePass8",
+                "confirm_password": "SecurePass8",
+                "save_recipe": "1",
+                "next": next_url,
+                "csrf_token": token,
+            },
+            follow_redirects=True,
+        )
+        text = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Account created successfully! Your recipe has been added to your favourites.", text)
+        self.assertIn("Exact Recipe Matches", text)
+        self.assertIn(">Remove<", text)
+        self.assertIn("Logout", text)
+        with self.app.app_context():
+            self.assertEqual(User.query.filter_by(email="save@example.com").count(), 1)
+            self.assertEqual(db.session.query(Recipe).filter_by(id=1).count(), 1)
+            user = User.query.filter_by(email="save@example.com").one()
+            self.assertEqual(Favorite.query.filter_by(user_id=user.id, recipe_id=1).count(), 1)
+
+    def test_register_with_unsafe_pending_next_uses_normal_dashboard_redirect(self):
+        token = self.get_csrf_token("/register?save_recipe=1&next=https%3A%2F%2Fevil.example")
+
+        response = self.client.post(
+            "/register",
+            data={
+                "username": "safe_redirect_user",
+                "email": "safe-redirect@example.com",
+                "password": "SecurePass8",
+                "confirm_password": "SecurePass8",
+                "save_recipe": "1",
+                "next": "https://evil.example",
+                "csrf_token": token,
+            },
+            follow_redirects=False,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers.get("Location"), "/dashboard")
+
     def test_login_rotates_csrf_token_after_authentication(self):
-        self.register_user()
+        self.create_user()
         original_token = self.get_csrf_token("/login")
 
         response = self.client.post(
@@ -144,7 +201,7 @@ class TestAuth(CogniCookTestCase):
             self.assertNotEqual(session["_csrf_token"], original_token)
 
     def test_login_ignores_overlong_save_recipe_without_server_error(self):
-        self.register_user()
+        self.create_user()
         token = self.get_csrf_token("/login")
 
         response = self.client.post(
@@ -200,7 +257,6 @@ class TestAuth(CogniCookTestCase):
 
     def test_logout_requires_post(self):
         self.register_user()
-        self.login_user()
 
         response = self.client.get("/logout")
         self.assertEqual(response.status_code, 405)
@@ -214,7 +270,7 @@ class TestAuth(CogniCookTestCase):
         self.assertIn(b"Welcome to CogniCook", response.data)
 
     def test_login_rate_limit_blocks_repeated_failures(self):
-        self.register_user()
+        self.create_user()
 
         for _ in range(5):
             response = self.client.post(
@@ -242,7 +298,7 @@ class TestAuth(CogniCookTestCase):
         self.assertIn("Too many login attempts", response.get_data(as_text=True))
 
     def test_login_account_lockout_blocks_rotating_remote_addresses(self):
-        self.register_user()
+        self.create_user()
 
         for index in range(5):
             response = self.client.post(
@@ -272,7 +328,7 @@ class TestAuth(CogniCookTestCase):
         self.assertIn("Too many login attempts", response.get_data(as_text=True))
 
     def test_rate_limit_ignores_untrusted_forwarded_for_header(self):
-        self.register_user()
+        self.create_user()
 
         for value in ["1.1.1.1", "2.2.2.2", "3.3.3.3", "4.4.4.4", "5.5.5.5"]:
             response = self.client.post(
@@ -301,7 +357,7 @@ class TestAuth(CogniCookTestCase):
         self.assertEqual(response.status_code, 429)
 
     def test_email_uniqueness_is_case_insensitive(self):
-        self.register_user(email="case@example.com")
+        self.create_user(email="case@example.com")
         response = self.register_user(username="different_user", email="CASE@example.com")
         self.assertIn(b"Email address already in use.", response.data)
 

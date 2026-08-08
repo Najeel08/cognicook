@@ -90,6 +90,12 @@ class TestUtils(CogniCookTestCase):
         self.assertEqual(records[1].ingredient, "tomato")
         self.assertEqual(records[1].display_measurement, "2 medium")
 
+    def test_ingredient_measurement_parser_ignores_malformed_json_shapes(self):
+        self.assertEqual(
+            parse_ingredient_measurements('[{"ingredient":"Onion","quantity":"1",]'),
+            [],
+        )
+
     def test_pagination_marks_current_and_disabled_controls_for_screen_readers(self):
         self.register_user()
         self.login_user()

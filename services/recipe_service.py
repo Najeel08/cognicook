@@ -1,4 +1,5 @@
 import re
+import threading
 from difflib import get_close_matches
 
 from sqlalchemy import event
@@ -47,6 +48,7 @@ _similarity_cache = {
     "ingredient_vocabulary": frozenset(),
     "max_ingredient_words": 1,
 }
+_similarity_cache_lock = threading.RLock()
 
 WORD_PATTERN = re.compile(r"[a-z]+")
 TITLE_STOPWORDS = {"recipe", "dish"}
@@ -54,14 +56,15 @@ TITLE_MATCH_THRESHOLD = 0.75
 
 
 def invalidate_recipe_similarity_cache(*_args, **_kwargs):
-    _similarity_cache["vocab_built"] = False
-    _similarity_cache["index_built"] = False
-    _similarity_cache["recipe_ids"] = ()
-    _similarity_cache["recipe_positions"] = {}
-    _similarity_cache["vectorizer"] = None
-    _similarity_cache["matrix"] = None
-    _similarity_cache["ingredient_vocabulary"] = frozenset()
-    _similarity_cache["max_ingredient_words"] = 1
+    with _similarity_cache_lock:
+        _similarity_cache["vocab_built"] = False
+        _similarity_cache["index_built"] = False
+        _similarity_cache["recipe_ids"] = ()
+        _similarity_cache["recipe_positions"] = {}
+        _similarity_cache["vectorizer"] = None
+        _similarity_cache["matrix"] = None
+        _similarity_cache["ingredient_vocabulary"] = frozenset()
+        _similarity_cache["max_ingredient_words"] = 1
 
 
 @event.listens_for(Recipe, "after_insert")
@@ -84,27 +87,28 @@ def normalize_query_words(value):
 
 
 def get_ingredient_vocabulary():
-    if _similarity_cache["vocab_built"]:
+    with _similarity_cache_lock:
+        if _similarity_cache["vocab_built"]:
+            return _similarity_cache["ingredient_vocabulary"], _similarity_cache["max_ingredient_words"]
+
+        recipes = Recipe.query.order_by(Recipe.id.asc()).all()
+        vocabulary = {
+            ingredient
+            for recipe in recipes
+            for ingredient in recipe.ingredient_list()
+            if ingredient
+        }
+        vocabulary.update(
+            alias
+            for ingredient in tuple(vocabulary)
+            for alias in ingredient_match_terms(ingredient)
+        )
+        max_words = max((len(ingredient.split()) for ingredient in vocabulary), default=1)
+
+        _similarity_cache["ingredient_vocabulary"] = frozenset(vocabulary)
+        _similarity_cache["max_ingredient_words"] = max_words
+        _similarity_cache["vocab_built"] = True
         return _similarity_cache["ingredient_vocabulary"], _similarity_cache["max_ingredient_words"]
-
-    recipes = Recipe.query.order_by(Recipe.id.asc()).all()
-    vocabulary = {
-        ingredient
-        for recipe in recipes
-        for ingredient in recipe.ingredient_list()
-        if ingredient
-    }
-    vocabulary.update(
-        alias
-        for ingredient in tuple(vocabulary)
-        for alias in ingredient_match_terms(ingredient)
-    )
-    max_words = max((len(ingredient.split()) for ingredient in vocabulary), default=1)
-
-    _similarity_cache["ingredient_vocabulary"] = frozenset(vocabulary)
-    _similarity_cache["max_ingredient_words"] = max_words
-    _similarity_cache["vocab_built"] = True
-    return _similarity_cache["ingredient_vocabulary"], _similarity_cache["max_ingredient_words"]
 
 
 def extract_known_ingredients(text, vocabulary, max_words):
@@ -250,30 +254,31 @@ def best_title_relevance_score(recipe, *query_texts):
 
 
 def build_similarity_index():
-    if _similarity_cache["index_built"]:
-        return _similarity_cache
+    with _similarity_cache_lock:
+        if _similarity_cache["index_built"]:
+            return _similarity_cache.copy()
 
-    recipes = Recipe.query.order_by(Recipe.id.asc()).all()
-    if not recipes:
-        _similarity_cache["index_built"] = True
-        return _similarity_cache
+        recipes = Recipe.query.order_by(Recipe.id.asc()).all()
+        if not recipes:
+            _similarity_cache["index_built"] = True
+            return _similarity_cache.copy()
 
-    recipe_texts = [recipe_query_text(recipe) for recipe in recipes]
-    if not any(recipe_texts):
-        _similarity_cache["index_built"] = True
+        recipe_texts = [recipe_query_text(recipe) for recipe in recipes]
+        if not any(recipe_texts):
+            _similarity_cache["index_built"] = True
+            _similarity_cache["recipe_ids"] = tuple(recipe.id for recipe in recipes)
+            _similarity_cache["recipe_positions"] = {recipe.id: index for index, recipe in enumerate(recipes)}
+            return _similarity_cache.copy()
+
+        vectorizer = TfidfVectorizer()
+        matrix = vectorizer.fit_transform(recipe_texts)
+
         _similarity_cache["recipe_ids"] = tuple(recipe.id for recipe in recipes)
         _similarity_cache["recipe_positions"] = {recipe.id: index for index, recipe in enumerate(recipes)}
-        return _similarity_cache
-
-    vectorizer = TfidfVectorizer()
-    matrix = vectorizer.fit_transform(recipe_texts)
-
-    _similarity_cache["recipe_ids"] = tuple(recipe.id for recipe in recipes)
-    _similarity_cache["recipe_positions"] = {recipe.id: index for index, recipe in enumerate(recipes)}
-    _similarity_cache["vectorizer"] = vectorizer
-    _similarity_cache["matrix"] = matrix
-    _similarity_cache["index_built"] = True
-    return _similarity_cache
+        _similarity_cache["vectorizer"] = vectorizer
+        _similarity_cache["matrix"] = matrix
+        _similarity_cache["index_built"] = True
+        return _similarity_cache.copy()
 
 
 def score_recipes_by_similarity(user_ingredients):

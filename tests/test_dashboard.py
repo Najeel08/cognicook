@@ -21,7 +21,7 @@ class TestDashboard(CogniCookTestCase):
         self.assertIn('role="alert"', response.get_data(as_text=True))
 
     def test_dashboard_only_shows_ingredient_input_before_search(self):
-        self.register_user()
+        self.create_user()
         response = self.login_user(username="tester@example.com")
         self.assertIn("Invalid username or password.", response.get_data(as_text=True))
 

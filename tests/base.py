@@ -141,6 +141,18 @@ class CogniCookTestCase(unittest.TestCase):
             follow_redirects=True,
         )
 
+    def create_user(self, username="tester_user", email="tester@example.com", password="SecurePass8"):
+        with self.app.app_context():
+            user = User(name=username, email=email)
+            user.set_password(password)
+            db.session.add(user)
+            db.session.commit()
+            return user.id
+
+    def logout_user(self):
+        token = self.get_csrf_token("/dashboard")
+        return self.client.post("/logout", data={"csrf_token": token}, follow_redirects=True)
+
     def login_user(self, username="tester_user", password="SecurePass8"):
         token = self.get_csrf_token("/login")
         return self.client.post(

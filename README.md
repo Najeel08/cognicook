@@ -42,7 +42,7 @@ python app.py
 
 Open `http://127.0.0.1:5000` in the browser.
 
-A local `.env` file is optional. For custom configuration, use the variables shown in `.env.example`.
+For custom configuration, set environment variables in the shell or process manager before starting the app. See `.env.example` for supported variable names.
 
 ## Tests
 
@@ -63,4 +63,3 @@ Import the dataset into the local database:
 ```powershell
 python scripts/import_dataset.py
 ```
-

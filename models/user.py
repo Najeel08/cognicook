@@ -8,6 +8,7 @@ class User(UserMixin, db.Model):
     name = db.Column(db.String(100, collation="NOCASE"), unique=True, nullable=False)
     email = db.Column(db.String(254, collation="NOCASE"), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
+    favorites = db.relationship("Favorite", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def username(self):
