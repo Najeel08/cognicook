@@ -72,7 +72,9 @@ function initializeThemeToggle() {
 
     updateToggleState(currentTheme());
 
-    const colorSchemeQuery = window.matchMedia("(prefers-color-scheme: light)");
+    const colorSchemeQuery = typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-color-scheme: light)")
+        : null;
     const handleColorSchemeChange = (event) => {
         let hasStoredTheme = false;
         try {
@@ -88,9 +90,9 @@ function initializeThemeToggle() {
         applyTheme(event.matches ? "light" : "dark", false);
     };
 
-    if (colorSchemeQuery.addEventListener) {
+    if (colorSchemeQuery?.addEventListener) {
         colorSchemeQuery.addEventListener("change", handleColorSchemeChange);
-    } else if (colorSchemeQuery.addListener) {
+    } else if (colorSchemeQuery?.addListener) {
         colorSchemeQuery.addListener(handleColorSchemeChange);
     }
 }

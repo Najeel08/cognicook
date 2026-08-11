@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
-    <meta name="description" content="{% block meta_description %}CogniCook helps users find Indian recipes from available ingredients, explore similar dishes, and save favorite recipes.{% endblock %}" />
-    <title>{% block title %}{{ title or "CogniCook" }}{% endblock %}</title>
+    <meta name="description" content="{% block meta_description %}Cogni Cook (Intelligent Recipe Recommendation System) helps users find Indian recipes from available ingredients, explore similar dishes, and save favorite recipes.{% endblock %}" />
+    <title>{% block title %}{{ title or "Cogni Cook (Intelligent Recipe Recommendation System)" }}{% endblock %}</title>
     <script src="{{ static_asset_url('js/theme-init.js') }}"></script>
     <link href="{{ static_asset_url('css/bootstrap.min.css') }}" rel="stylesheet" />
     <link href="{{ static_asset_url('css/cognicook.css') }}" rel="stylesheet" />
@@ -13,9 +13,6 @@
   <body>
     <a class="skip-link" href="#main-content">Skip to main content</a>
     <div class="app-shell">
-      <div class="ambient ambient-one"></div>
-      <div class="ambient ambient-two"></div>
-      <div class="ambient-grid"></div>
       {% include "_kitchen_decor.html" %}
 
       <nav class="topbar" aria-label="Primary navigation">
@@ -27,7 +24,7 @@
                 <path class="chef-line chef-detail" d="M6 17h12" />
               </svg>
             </span>
-            <span class="brandmark-word">CogniCook</span>
+            <span class="brandmark-word">Cogni Cook</span>
           </a>
 
           <div class="topbar-actions">

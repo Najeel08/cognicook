@@ -1,7 +1,10 @@
 from tests.base import (
     CogniCookTestCase,
+    StaticPool,
+    create_app,
     db,
     Recipe,
+    get_ingredient_vocabulary,
     get_strict_recommendations,
     parse_ingredient_query,
 )
@@ -57,6 +60,52 @@ class TestRecommendations(CogniCookTestCase):
 
         self.assertEqual(ingredients, ["chicken", "onion", "tomato"])
         self.assertEqual(normalized_text, "chicken, onion, tomato")
+
+    def test_recommendation_cache_is_reset_for_fresh_app_database(self):
+        with self.app.app_context():
+            db.session.add(
+                Recipe(
+                    title="Rare Pepper Demo",
+                    ingredients="rarepepper,salt,oil",
+                    instructions="Cook rare pepper.",
+                    diet_type="veg",
+                    difficulty="easy",
+                    cooking_time=12,
+                )
+            )
+            db.session.commit()
+            self.assertIn("rarepepper", get_ingredient_vocabulary()[0])
+
+        class EmptyConfig:
+            TESTING = True
+            SECRET_KEY = "test-secret-key"
+            SQLALCHEMY_DATABASE_URI = "sqlite://"
+            SQLALCHEMY_TRACK_MODIFICATIONS = False
+            SQLALCHEMY_ENGINE_OPTIONS = {
+                "connect_args": {"check_same_thread": False},
+                "poolclass": StaticPool,
+            }
+            SESSION_COOKIE_HTTPONLY = True
+            SESSION_COOKIE_SAMESITE = "Lax"
+            SESSION_COOKIE_SECURE = False
+            REMEMBER_COOKIE_HTTPONLY = True
+            REMEMBER_COOKIE_SAMESITE = "Lax"
+            REMEMBER_COOKIE_SECURE = False
+            MAX_CONTENT_LENGTH = 1024 * 1024
+            RESULTS_PER_PAGE = 2
+            MAX_PER_PAGE = 10
+            AUTO_BOOTSTRAP_DATA = False
+            TRUSTED_HOSTS = None
+
+        isolated_app = create_app(EmptyConfig)
+        try:
+            with isolated_app.app_context():
+                self.assertEqual(Recipe.query.count(), 0)
+                self.assertNotIn("rarepepper", get_ingredient_vocabulary()[0])
+        finally:
+            with isolated_app.app_context():
+                db.session.remove()
+                db.engine.dispose()
 
     def test_strict_recommendations_rank_more_complete_exact_matches_first(self):
         with self.app.app_context():

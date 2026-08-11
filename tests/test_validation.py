@@ -2,7 +2,6 @@ from tests.base import (
     CogniCookTestCase,
     BASE_DIR,
     resolve_project_path,
-    db,
     load_dataset_rows,
 )
 

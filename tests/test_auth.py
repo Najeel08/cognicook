@@ -156,7 +156,7 @@ class TestAuth(CogniCookTestCase):
         text = response.get_data(as_text=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Account created successfully! Your recipe has been added to your favourites.", text)
+        self.assertIn("Account created successfully! Your recipe has been added to your favorites.", text)
         self.assertIn("Exact Recipe Matches", text)
         self.assertIn(">Remove<", text)
         self.assertIn("Logout", text)
@@ -267,7 +267,7 @@ class TestAuth(CogniCookTestCase):
 
         response = self.client.get("/dashboard", follow_redirects=False)
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Welcome to CogniCook", response.data)
+        self.assertIn(b"Welcome to Cogni Cook", response.data)
 
     def test_login_rate_limit_blocks_repeated_failures(self):
         self.create_user()

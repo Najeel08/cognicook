@@ -13,7 +13,7 @@ from services.data_loader import replace_recipe_data
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Import the canonical CogniCook CSV dataset into the database.")
+    parser = argparse.ArgumentParser(description="Import the canonical Cogni Cook (Intelligent Recipe Recommendation System) CSV dataset into the database.")
     parser.add_argument("--dataset", help="CSV dataset path. Defaults to Config.DATASET_PATH.")
     parser.add_argument(
         "--no-preserve-favorites",

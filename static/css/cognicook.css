@@ -228,11 +228,6 @@ a,
     transform: translateY(0);
 }
 
-.ambient,
-.ambient-grid {
-    display: none;
-}
-
 .kitchen-decor {
     position: fixed;
     inset: 0;

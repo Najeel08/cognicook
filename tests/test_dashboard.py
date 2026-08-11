@@ -1,7 +1,6 @@
 from tests.base import (
     CogniCookTestCase,
     BASE_DIR,
-    Recipe,
 )
 
 

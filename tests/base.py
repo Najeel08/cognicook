@@ -17,7 +17,13 @@ from models.favorite import Favorite
 from models.recipe import Recipe
 from models.user import User
 from services.data_loader import bootstrap_recipe_data, load_dataset_rows, normalize_instructions, normalize_row, replace_recipe_rows
-from services.recipe_service import get_similar_recommendations, get_strict_recommendations, parse_ingredient_query, sort_similar_matches
+from services.recipe_service import (
+    get_ingredient_vocabulary,
+    get_similar_recommendations,
+    get_strict_recommendations,
+    parse_ingredient_query,
+    sort_similar_matches,
+)
 from utils.ingredient_cleaner import clean_ingredients
 from utils.ingredient_measurements import parse_ingredient_measurements
 from utils.instructions import split_instruction_block

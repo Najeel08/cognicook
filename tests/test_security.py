@@ -1,5 +1,11 @@
+import os
+import subprocess
+import sys
+import uuid
+
 from tests.base import (
     CogniCookTestCase,
+    BASE_DIR,
     inspect,
     StaticPool,
     create_app,
@@ -181,6 +187,43 @@ class TestSecurity(CogniCookTestCase):
             with production_app.app_context():
                 db.session.remove()
                 db.engine.dispose()
+
+    def test_production_without_secret_key_does_not_create_development_secret(self):
+        temporary_directory = BASE_DIR / "instance" / f"prod-secret-check-{uuid.uuid4().hex}"
+        env = os.environ.copy()
+        env["COGNICOOK_ENV"] = "production"
+        env["COGNICOOK_DATA_DIR"] = str(temporary_directory)
+        env["COGNICOOK_SKIP_APP_BOOTSTRAP"] = "1"
+        env["COGNICOOK_TRUSTED_HOSTS"] = "cognicook.example"
+        env["SESSION_COOKIE_SECURE"] = "1"
+        env.pop("SECRET_KEY", None)
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "from app import create_app\n"
+                    "try:\n"
+                    "    create_app()\n"
+                    "except RuntimeError as error:\n"
+                    "    print(error)\n"
+                    "else:\n"
+                    "    raise SystemExit('expected production startup failure')\n"
+                ),
+            ],
+            cwd=BASE_DIR,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("SECRET_KEY must be provided", result.stdout)
+        self.assertFalse((temporary_directory / ".secret_key").exists())
+        self.assertFalse(temporary_directory.exists())
 
     def test_static_assets_use_versioned_urls_with_immutable_cache_headers(self):
         response = self.client.get("/dashboard")

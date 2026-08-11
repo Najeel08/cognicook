@@ -509,7 +509,9 @@ def create_app(config_object=Config):
         from models.favorite import Favorite
         from models.recipe import Recipe
         from models.user import User
+        from services.recipe_service import invalidate_recipe_similarity_cache
 
+        invalidate_recipe_similarity_cache()
         db.create_all()
         ensure_user_schema(app)
         ensure_user_email_schema(app)

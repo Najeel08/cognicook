@@ -51,28 +51,31 @@ def current_similar_filters():
     }
 
 
+def _safe_local_path_from_parsed_url(parsed):
+    path_is_local = (
+        parsed.path.startswith("/")
+        and not parsed.path.startswith("//")
+        and "\\" not in parsed.path
+    )
+    path_is_safe = is_safe_input(parsed.path, max_length=2048)
+    query_is_safe = is_safe_input(parsed.query, max_length=1200) and "<" not in parsed.query and ">" not in parsed.query
+    if not path_is_local or not path_is_safe or not query_is_safe:
+        return ""
+
+    target = parsed.path
+    if parsed.query:
+        target = f"{target}?{parsed.query}"
+    return target
+
+
 def get_safe_redirect_target(default_endpoint, **values):
     referrer = request.referrer
     if referrer:
         parsed = urlsplit(referrer)
-        path_is_local = (
-            parsed.path.startswith("/")
-            and not parsed.path.startswith("//")
-            and "\\" not in parsed.path
-        )
-        path_is_safe = is_safe_input(parsed.path, max_length=2048)
-        query_is_safe = is_safe_input(parsed.query, max_length=1200) and "<" not in parsed.query and ">" not in parsed.query
-        if (
-            parsed.scheme in {"http", "https"}
-            and parsed.netloc == request.host
-            and path_is_local
-            and path_is_safe
-            and query_is_safe
-        ):
-            target = parsed.path
-            if parsed.query:
-                target = f"{target}?{parsed.query}"
-            return target
+        if parsed.scheme in {"http", "https"} and parsed.netloc == request.host:
+            target = _safe_local_path_from_parsed_url(parsed)
+            if target:
+                return target
 
     return url_for(default_endpoint, **values)
 
@@ -82,20 +85,10 @@ def get_safe_return_path(value):
         return ""
 
     parsed = urlsplit(value)
-    path_is_local = (
-        parsed.path.startswith("/")
-        and not parsed.path.startswith("//")
-        and "\\" not in parsed.path
-    )
-    path_is_safe = is_safe_input(parsed.path, max_length=2048)
-    query_is_safe = is_safe_input(parsed.query, max_length=1200) and "<" not in parsed.query and ">" not in parsed.query
-    if parsed.scheme or parsed.netloc or not path_is_local or not path_is_safe or not query_is_safe:
+    if parsed.scheme or parsed.netloc:
         return ""
 
-    target = parsed.path
-    if parsed.query:
-        target = f"{target}?{parsed.query}"
-    return target
+    return _safe_local_path_from_parsed_url(parsed)
 
 
 def get_favorite_recipe_ids(recipe_ids):
@@ -326,7 +319,7 @@ def register_routes(app):
             if request.form.get("save_recipe"):
                 redirect_url = auto_save_recipe_after_login(
                     request.form,
-                    saved_message="Account created successfully! Your recipe has been added to your favourites.",
+                    saved_message="Account created successfully! Your recipe has been added to your favorites.",
                 )
                 return redirect(redirect_url)
             flash("Account created successfully!", "success")

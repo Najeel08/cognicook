@@ -46,7 +46,7 @@ def clean_dataset(input_path=DEFAULT_INPUT, output_path=DEFAULT_OUTPUT):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Clean the CogniCook recipe CSV into the canonical dataset file.")
+    parser = argparse.ArgumentParser(description="Clean the Cogni Cook (Intelligent Recipe Recommendation System) recipe CSV into the canonical dataset file.")
     parser.add_argument("--input", default=str(DEFAULT_INPUT), help="Raw CSV path to clean.")
     parser.add_argument("--output", default=str(DEFAULT_OUTPUT), help="Clean canonical CSV path to write.")
     return parser.parse_args()

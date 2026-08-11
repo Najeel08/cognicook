@@ -12,8 +12,8 @@
     </h1>
 
     <p class="lead-copy">
-      Sign in to search by ingredients, discover exact recipe matches,
-      explore similar dishes, and save your favorites in one place.
+      Sign in to save your favorite recipes while you discover exact
+      matches and explore similar dishes.
     </p>
   </div>
 
@@ -92,7 +92,7 @@
     </form>
 
     <p class="auth-switch">
-      New to CogniCook?
+      New to Cogni Cook?
       <a href="{{ url_for('register', save_recipe=save_recipe, next=next_url) if save_recipe or next_url else url_for('register') }}">
         Create an account
       </a>

@@ -100,6 +100,35 @@ class TestFavorites(CogniCookTestCase):
         with self.app.app_context():
             self.assertEqual(Favorite.query.count(), 1)
 
+    def test_favorite_actions_are_scoped_to_current_user(self):
+        owner_id = self.create_user(username="owner_user", email="owner@example.com")
+        self.login_user(username="owner_user")
+
+        token = self.get_csrf_token("/recommendations?ingredients=onion,tomato,potato")
+        self.client.post("/favorite/1", data={"csrf_token": token}, follow_redirects=True)
+        self.logout_user()
+
+        other_id = self.create_user(username="other_user", email="other@example.com")
+        self.login_user(username="other_user")
+
+        response = self.client.get("/favorites")
+        self.assertNotIn("Simple Curry", response.get_data(as_text=True))
+
+        token = self.get_csrf_token("/favorites")
+        response = self.client.post("/favorite/1/remove", data={"csrf_token": token}, follow_redirects=True)
+        self.assertIn("Favorite recipe not found.", response.get_data(as_text=True))
+
+        with self.app.app_context():
+            self.assertEqual(Favorite.query.filter_by(user_id=owner_id, recipe_id=1).count(), 1)
+            self.assertEqual(Favorite.query.filter_by(user_id=other_id, recipe_id=1).count(), 0)
+
+        token = self.get_csrf_token("/recommendations?ingredients=onion,tomato,potato")
+        self.client.post("/favorite/1", data={"csrf_token": token}, follow_redirects=True)
+
+        with self.app.app_context():
+            self.assertEqual(Favorite.query.filter_by(user_id=owner_id, recipe_id=1).count(), 1)
+            self.assertEqual(Favorite.query.filter_by(user_id=other_id, recipe_id=1).count(), 1)
+
     def test_replace_recipe_rows_preserves_matching_favorites(self):
         self.register_user()
         self.login_user()

@@ -1,6 +1,6 @@
-# CogniCook
+# Cogni Cook (Intelligent Recipe Recommendation System)
 
-CogniCook is a Flask recipe recommendation web app that finds recipes from ingredients a user already has. It supports exact ingredient matches, similarity-based recommendations, filters, user accounts, and saved favorites.
+Cogni Cook (Intelligent Recipe Recommendation System) is a Flask recipe recommendation web app that finds recipes from ingredients a user already has. It supports exact ingredient matches, similarity-based recommendations, filters, user accounts, and saved favorites.
 
 ## Features
 

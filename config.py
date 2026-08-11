@@ -31,7 +31,7 @@ TRUSTED_HOSTS = [
 ]
 SECRET_KEY = os.environ.get("SECRET_KEY")
 SECRET_KEY_FROM_ENV = bool(SECRET_KEY)
-if not SECRET_KEY:
+if not SECRET_KEY and not IS_PRODUCTION:
     INSTANCE_PATH.mkdir(parents=True, exist_ok=True)
     dev_secret_path = INSTANCE_PATH / ".secret_key"
     try:
