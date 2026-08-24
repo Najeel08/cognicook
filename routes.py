@@ -189,6 +189,10 @@ def get_pagination_args():
 
 
 def register_routes(app):
+    @app.route("/healthz", methods=["GET"])
+    def healthz():
+        return "OK", 200
+
     @app.route("/", methods=["GET"])
     def landing():
         return redirect(url_for("dashboard"))

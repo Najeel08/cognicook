@@ -22,6 +22,7 @@ from utils.validators import is_safe_input
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 ALLOWED_QUERY_PARAMS_BY_ENDPOINT = {
     "landing": set(),
+    "healthz": set(),
     "login": {"save_recipe", "next"},
     "register": {"save_recipe", "next"},
     "dashboard": set(),
