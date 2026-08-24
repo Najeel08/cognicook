@@ -20,16 +20,16 @@ Cogni Cook is a Flask-based web application that recommends recipes based on ing
 
 ## Project Structure
 
-- `app.py` — Application entry point, configuration, middleware, and error handlers.
-- `routes.py` — Web endpoints, authentication flows, and view logic.
-- `config.py` — Application and security settings.
-- `models/` — SQLAlchemy database models (`User`, `Recipe`, `Favorite`, `AuthAttempt`).
-- `services/` — Recommendation engine and dataset loader.
-- `utils/` — Input validation, ingredient normalization, and pagination utilities.
-- `templates/` & `static/` — Jinja2 HTML templates, styling, and client-side scripts.
-- `dataset/` — Raw and canonical recipe datasets (`recipes.csv`).
-- `scripts/` — Dataset cleaning and database import utilities.
-- `tests/` — Automated test suite covering security, authentication, and recommendations.
+- `app.py` - Application entry point, configuration, middleware, and error handlers.
+- `routes.py` - Web endpoints, authentication flows, and view logic.
+- `config.py` - Application and security settings.
+- `models/` - SQLAlchemy database models (`User`, `Recipe`, `Favorite`, `AuthAttempt`).
+- `services/` - Recommendation engine and dataset loader.
+- `utils/` - Input validation, ingredient normalization, and pagination utilities.
+- `templates/` & `static/` - Jinja2 HTML templates, styling, and client-side scripts.
+- `dataset/` - Raw and canonical recipe datasets (`recipes.csv`).
+- `scripts/` - Dataset cleaning and database import utilities.
+- `tests/` - Automated test suite covering security, authentication, and recommendations.
 
 ## Local Setup
 
