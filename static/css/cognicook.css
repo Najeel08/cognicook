@@ -765,17 +765,39 @@ textarea.form-control {
 
 .flash-card {
     border-radius: 18px;
-    padding: 0.9rem 1rem;
-    border: 1px solid var(--surface-border);
-    background: var(--surface-raised);
-    color: var(--text-main);
+    padding: 0.92rem 1.2rem;
+    border: 1px solid color-mix(in srgb, var(--accent-orange) 45%, var(--surface-border));
+    background: color-mix(in srgb, var(--accent-orange) 8%, var(--surface-raised));
+    color: var(--accent-orange);
+    font-weight: 700;
+    font-size: 0.96rem;
+    line-height: 1.45;
+    letter-spacing: 0.01em;
     backdrop-filter: blur(14px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16), 0 0 16px color-mix(in srgb, var(--accent-orange) 12%, transparent);
 }
 
-.flash-success { border-color: var(--success-border); }
-.flash-danger { border-color: var(--error-border); }
-.flash-warning { border-color: var(--warning-border); }
-.flash-info { border-color: var(--info-border); }
+.flash-danger,
+.flash-warning {
+    border-color: color-mix(in srgb, var(--accent-orange) 52%, var(--surface-border));
+    background: color-mix(in srgb, var(--accent-orange) 10%, var(--surface-raised));
+    color: var(--accent-orange);
+    font-weight: 700;
+}
+
+.flash-success {
+    border-color: color-mix(in srgb, var(--accent-green) 50%, var(--surface-border));
+    background: color-mix(in srgb, var(--accent-green) 9%, var(--surface-raised));
+    color: var(--accent-green);
+    font-weight: 700;
+}
+
+.flash-info {
+    border-color: color-mix(in srgb, var(--accent-blue) 50%, var(--surface-border));
+    background: color-mix(in srgb, var(--accent-blue) 9%, var(--surface-raised));
+    color: var(--accent-blue);
+    font-weight: 700;
+}
 
 .auth-wrap {
     margin-top: 1.5rem;
@@ -1485,8 +1507,9 @@ textarea.form-control {
 .field-feedback {
     display: none;
     margin-top: -0.35rem;
-    color: var(--validation-text);
-    font-size: 0.84rem;
+    color: var(--accent-orange);
+    font-weight: 700;
+    font-size: 0.85rem;
     line-height: 1.45;
 }
 
