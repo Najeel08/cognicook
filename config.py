@@ -24,11 +24,15 @@ APP_ENV = os.environ.get("COGNICOOK_ENV", os.environ.get("FLASK_ENV", "developme
 IS_PRODUCTION = APP_ENV == "production"
 DEFAULT_SECURE_COOKIE = "1" if APP_ENV == "production" else "0"
 DEFAULT_AUTO_BOOTSTRAP_DATA = "0" if IS_PRODUCTION else "1"
+DEFAULT_AUTO_BOOTSTRAP_DATA = "1"
 TRUSTED_HOSTS = [
     value.strip()
     for value in os.environ.get("COGNICOOK_TRUSTED_HOSTS", "").split(",")
     if value.strip()
 ]
+render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "").strip()
+if render_host and render_host not in TRUSTED_HOSTS:
+    TRUSTED_HOSTS.append(render_host)
 SECRET_KEY = os.environ.get("SECRET_KEY")
 SECRET_KEY_FROM_ENV = bool(SECRET_KEY)
 if not SECRET_KEY and not IS_PRODUCTION:
