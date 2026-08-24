@@ -206,3 +206,38 @@ class TestRecommendations(CogniCookTestCase):
         self.assertIn("Back to Exact Matches", text)
         self.assertIn("Back to Dashboard", text)
 
+    def test_spice_and_ingredient_variant_matching(self):
+        with self.app.app_context():
+            db.session.add_all(
+                [
+                    Recipe(
+                        title="Cardamom Drink",
+                        ingredients="milk,sugar,cardamom powder",
+                        instructions="Mix milk, sugar, and cardamom powder.",
+                        diet_type="veg",
+                        difficulty="easy",
+                        cooking_time=5,
+                    ),
+                    Recipe(
+                        title="Turmeric Veg Curry",
+                        ingredients="potato,onion,turmeric powder,oil,salt",
+                        instructions="Cook potato and onion with turmeric powder and oil.",
+                        diet_type="veg",
+                        difficulty="easy",
+                        cooking_time=15,
+                    ),
+                ]
+            )
+            db.session.commit()
+
+            # Test whole cardamom matches cardamom powder
+            res_cardamom = get_strict_recommendations("milk, sugar, cardamom", page=1, per_page=10)
+            titles_cardamom = [r.title for r in res_cardamom["strict"].items]
+            self.assertIn("Cardamom Drink", titles_cardamom)
+
+            # Test turmeric matches turmeric powder
+            res_turmeric = get_strict_recommendations("potato, onion, turmeric, oil", page=1, per_page=10)
+            titles_turmeric = [r.title for r in res_turmeric["strict"].items]
+            self.assertIn("Turmeric Veg Curry", titles_turmeric)
+
+
