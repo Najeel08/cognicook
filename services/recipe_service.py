@@ -46,7 +46,6 @@ INGREDIENT_MATCH_ALIASES = {
     "semiya": {"vermicelli"},
     "turmeric": {"turmeric powder"},
     "turmeric powder": {"turmeric"},
-    "vanilla essence": {"vanilla"},
     "vanilla": {"vanilla essence", "vanilla extract"},
     "vanilla essence": {"vanilla", "vanilla extract"},
     "vanilla extract": {"vanilla", "vanilla essence"},
