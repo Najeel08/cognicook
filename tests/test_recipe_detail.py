@@ -28,8 +28,8 @@ class TestRecipeDetail(CogniCookTestCase):
                 "steps": ["Beat 2 eggs", "Add the remaining 1 tbsp butter", "Rest for 1 minute"],
             },
             "ragi kanji": {
-                "ingredients": ["ragi flour", "water", "milk", "jaggery", "cardamom"],
-                "measurements": ["1/2 cup", "2 cups", "1 cup", "1/4 cup", "1/4 tsp (powder)"],
+                "ingredients": ["ragi flour", "water", "milk", "jaggery", "cardamom powder"],
+                "measurements": ["1/2 cup", "2 cups", "1 cup", "1/4 cup", "1/4 tsp"],
                 "steps": ["Mix the ragi flour", "strained jaggery syrup", "serve warm"],
             },
             "cabbage thoran": {
