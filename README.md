@@ -2,6 +2,8 @@
 
 Cogni Cook is a Flask-based web application that recommends recipes based on ingredients you already have. It provides exact ingredient matching, similarity-based recipe discovery, dietary and difficulty filters, user authentication, and saved favorites.
 
+- **Live Demo:** [https://cogni-cook.onrender.com](https://cogni-cook.onrender.com)
+
 ## Features
 
 - **Ingredient-Based Search:** Find dishes you can prepare using available ingredients.
