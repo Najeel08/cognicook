@@ -66,7 +66,13 @@ Open `http://127.0.0.1:5000` in your web browser.
 
 ## Running Tests
 
-Execute the automated test suite with:
+Execute the automated test suite using `pytest` or `unittest`:
+
+```bash
+pytest
+```
+
+or:
 
 ```bash
 python -m unittest discover -s tests -p "test_*.py"
