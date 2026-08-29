@@ -484,7 +484,7 @@ h3 {
     color: var(--heading);
     font-family: var(--font-heading);
     line-height: 1.1;
-    letter-spacing: -0.02em;
+    letter-spacing: 0;
     overflow-wrap: anywhere;
 }
 

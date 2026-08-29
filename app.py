@@ -208,6 +208,26 @@ def ensure_user_email_schema(app):
         )
 
 
+def ensure_operational_indexes():
+    inspector = inspect(db.engine)
+
+    with db.engine.begin() as connection:
+        if inspector.has_table("auth_attempt"):
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_auth_attempt_attempted_at "
+                    "ON auth_attempt (attempted_at)"
+                )
+            )
+        if inspector.has_table("favorite"):
+            connection.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_favorite_recipe_id "
+                    "ON favorite (recipe_id)"
+                )
+            )
+
+
 def remove_retired_search_activity_schema():
     if not inspect(db.engine).has_table("search_activity"):
         return
@@ -517,6 +537,7 @@ def create_app(config_object=Config):
         ensure_user_schema(app)
         ensure_user_email_schema(app)
         ensure_recipe_schema()
+        ensure_operational_indexes()
         remove_retired_search_activity_schema()
         if app.config.get("AUTO_BOOTSTRAP_DATA", True):
             from services.data_loader import bootstrap_recipe_data

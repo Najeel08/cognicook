@@ -51,6 +51,14 @@ if not SECRET_KEY and not IS_PRODUCTION:
             pass
 
 
+def parse_nonnegative_int(value, default):
+    try:
+        parsed = int(value)
+    except (ValueError, TypeError):
+        return default
+    return parsed if parsed >= 0 else default
+
+
 class Config:
     IS_PRODUCTION = IS_PRODUCTION
     SECRET_KEY = SECRET_KEY
@@ -69,10 +77,10 @@ class Config:
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
     MAX_CONTENT_LENGTH = 1024 * 1024
     SECURITY_HSTS_ENABLED = os.environ.get("SECURITY_HSTS_ENABLED", DEFAULT_SECURE_COOKIE) == "1"
-    try:
-        SECURITY_HSTS_MAX_AGE = int(os.environ.get("SECURITY_HSTS_MAX_AGE", "31536000"))
-    except (ValueError, TypeError):
-        SECURITY_HSTS_MAX_AGE = 31536000
+    SECURITY_HSTS_MAX_AGE = parse_nonnegative_int(
+        os.environ.get("SECURITY_HSTS_MAX_AGE", "31536000"),
+        31536000,
+    )
     TRUSTED_HOSTS = TRUSTED_HOSTS or None
     DATASET_PATH = DATASET_PATH.as_posix()
     AUTO_BOOTSTRAP_DATA = os.environ.get("AUTO_BOOTSTRAP_DATA", DEFAULT_AUTO_BOOTSTRAP_DATA) == "1"

@@ -3,6 +3,7 @@ from extensions import db
 
 class Favorite(db.Model):
     __table_args__ = (
+        db.Index("ix_favorite_recipe_id", "recipe_id"),
         db.UniqueConstraint("user_id", "recipe_id", name="uq_favorite_user_recipe"),
     )
 

@@ -355,13 +355,7 @@ def sort_similar_matches(matches, sort_key):
         return
 
     if sort_key == "title_desc":
-        matches.sort(
-            key=lambda item: (
-                -item["relevance_score"],
-                item["missing_count"],
-                item["recipe"].title.lower(),
-            )
-        )
+        matches.sort(key=lambda item: (-item["relevance_score"], item["missing_count"]))
         matches.sort(key=lambda item: item["recipe"].title.lower(), reverse=True)
         return
 

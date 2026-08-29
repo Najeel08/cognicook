@@ -140,6 +140,19 @@ class TestSecurity(CogniCookTestCase):
         with self.app.app_context():
             self.assertFalse(inspect(db.engine).has_table("search_activity"))
 
+    def test_operational_database_indexes_exist(self):
+        with self.app.app_context():
+            auth_attempt_indexes = {
+                index["name"] for index in inspect(db.engine).get_indexes("auth_attempt")
+            }
+            favorite_indexes = {
+                index["name"] for index in inspect(db.engine).get_indexes("favorite")
+            }
+
+        self.assertIn("ix_auth_attempt_attempted_at", auth_attempt_indexes)
+        self.assertIn("ix_auth_attempt_key_attempted_at", auth_attempt_indexes)
+        self.assertIn("ix_favorite_recipe_id", favorite_indexes)
+
     def test_production_configuration_fails_closed(self):
         class ProductionConfig:
             TESTING = True

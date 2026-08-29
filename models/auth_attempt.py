@@ -3,6 +3,7 @@ from extensions import db
 
 class AuthAttempt(db.Model):
     __table_args__ = (
+        db.Index("ix_auth_attempt_attempted_at", "attempted_at"),
         db.Index("ix_auth_attempt_key_attempted_at", "key", "attempted_at"),
     )
 
