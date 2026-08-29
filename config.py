@@ -23,7 +23,7 @@ DATASET_PATH = resolve_project_path(
 APP_ENV = os.environ.get("COGNICOOK_ENV", os.environ.get("FLASK_ENV", "development")).strip().lower()
 IS_PRODUCTION = APP_ENV == "production"
 DEFAULT_SECURE_COOKIE = "1" if APP_ENV == "production" else "0"
-DEFAULT_AUTO_BOOTSTRAP_DATA = "0" if IS_PRODUCTION else "1"
+DEFAULT_AUTO_BOOTSTRAP_DATA = "1"
 TRUSTED_HOSTS = [
     value.strip()
     for value in os.environ.get("COGNICOOK_TRUSTED_HOSTS", "").split(",")
